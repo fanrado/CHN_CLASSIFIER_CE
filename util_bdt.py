@@ -98,12 +98,12 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
 
     output = {
         'regressor' : {
-            'X_train': X_train / X_train.max(),
-            'y_train': y_train[cols_output_regressor] / y_train[cols_output_regressor].max(),
-            'X_val' : X_val / X_val.max(),
-            'y_val' : y_val[cols_output_regressor] / y_val[cols_output_regressor].max(),
-            'X_test' : X_test / X_test.max(),
-            'y_test' : y_test[cols_output_regressor] / y_test[cols_output_regressor].max()
+            'X_train': X_train,# / X_train.max(),
+            'y_train': y_train[cols_output_regressor],# / y_train[cols_output_regressor].max(),
+            'X_val' : X_val,# / X_val.max(),
+            'y_val' : y_val[cols_output_regressor],# / y_val[cols_output_regressor].max(),
+            'X_test' : X_test,# / X_test.max(),
+            'y_test' : y_test[cols_output_regressor],# / y_test[cols_output_regressor].max()
         },
         'classifier' : {
             'X_train' : y_train[cols_output_regressor],
@@ -119,9 +119,82 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
 def dataframe2DMatrix(X, y=None):
     return xgb.DMatrix(X, label=y)
 
-def gridSearch_Regressor(train_data_dict, param_grid: dict):
+# def gridSearch_Regressor(train_data_dict, param_grid: dict):
+#     """
+#     Performs grid search cross-validation to find optimal hyperparameters for XGBoost regressor.
+    
+#     Parameters:
+#     -----------
+#     train_data_dict : dict
+#         Dictionary containing training and validation data with keys:
+#         - 'X_train': Training input features
+#         - 'y_train': Training target values
+#         - 'X_val': Validation input features
+#         - 'y_val': Validation target values
+    
+#     param_grid : dict
+#         Dictionary with hyperparameter names as keys and lists of parameter values to try.
+#         Example:
+#         {
+#             'max_depth': [3, 4, 5],
+#             'learning_rate': [0.01, 0.1],
+#             'n_estimators': [100, 200]
+#         }
+    
+#     Returns:
+#     --------
+#     dict
+#         Dictionary containing the best parameters found during grid search
+    
+#     Notes:
+#     ------
+#     - Uses GPU acceleration with 'gpu_hist' tree method
+#     - Performs 3-fold cross-validation
+#     - Uses negative mean squared error as scoring metric
+#     - Utilizes all available CPU cores (n_jobs=-1)
+#     - Prints best parameters and score during execution
+    
+#     Example:
+#     --------
+#     >>> param_grid = {
+#     ...     'max_depth': [3, 4, 5],
+#     ...     'learning_rate': [0.01, 0.1]
+#     ... }
+#     >>> best_params = gridSearch_Regressor(train_data, param_grid)
+#     """
+#     # Initialize the XGBoost regressor
+#     xgb_reg = XGBRegressor(
+#         tree_method='gpu_hist',
+#         enable_categorical=False,
+#     )
+
+#     # Setup GridSearchCV
+#     grid_search = GridSearchCV(
+#         estimator=xgb_reg,
+#         param_grid=param_grid,
+#         scoring='neg_mean_squared_error',  # or 'r2', 'neg_mean_absolute_error'
+#         cv=3,
+#         verbose=2,
+#         n_jobs=-1
+#     )
+
+#     # Fit the model
+#     grid_search.fit(
+#         train_data_dict['X_train'],
+#         train_data_dict['y_train'],
+#         eval_set=[(train_data_dict['X_val'], train_data_dict['y_val'])],
+#         verbose=True
+#     )
+
+#     # Get the best parameters and score
+#     print("Best parameters:", grid_search.best_params_)
+#     print("Best score:", -grid_search.best_score_)  # Convert back to positive MSE
+
+#     return grid_search.best_params_
+
+def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str):
     """
-    Performs grid search cross-validation to find optimal hyperparameters for XGBoost regressor.
+    Performs grid search to find optimal hyperparameters for XGBoost using native API.
     
     Parameters:
     -----------
@@ -133,64 +206,80 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict):
         - 'y_val': Validation target values
     
     param_grid : dict
-        Dictionary with hyperparameter names as keys and lists of parameter values to try.
+        Dictionary with hyperparameter names as lists of values to try.
         Example:
         {
             'max_depth': [3, 4, 5],
-            'learning_rate': [0.01, 0.1],
-            'n_estimators': [100, 200]
+            'eta': [0.01, 0.1],      # learning_rate
+            'num_boost_round': [100, 200]
         }
     
     Returns:
     --------
     dict
         Dictionary containing the best parameters found during grid search
-    
-    Notes:
-    ------
-    - Uses GPU acceleration with 'gpu_hist' tree method
-    - Performs 3-fold cross-validation
-    - Uses negative mean squared error as scoring metric
-    - Utilizes all available CPU cores (n_jobs=-1)
-    - Prints best parameters and score during execution
-    
-    Example:
-    --------
-    >>> param_grid = {
-    ...     'max_depth': [3, 4, 5],
-    ...     'learning_rate': [0.01, 0.1]
-    ... }
-    >>> best_params = gridSearch_Regressor(train_data, param_grid)
     """
-    # Initialize the XGBoost regressor
-    xgb_reg = XGBRegressor(
-        tree_method='gpu_hist',
-        enable_categorical=True,
-    )
-
-    # Setup GridSearchCV
-    grid_search = GridSearchCV(
-        estimator=xgb_reg,
-        param_grid=param_grid,
-        scoring='neg_mean_squared_error',  # or 'r2', 'neg_mean_absolute_error'
-        cv=3,
-        verbose=2,
-        n_jobs=-1
-    )
-
-    # Fit the model
-    grid_search.fit(
-        train_data_dict['X_train'],
-        train_data_dict['y_train'],
-        eval_set=[(train_data_dict['X_val'], train_data_dict['y_val'])],
-        verbose=True
-    )
-
-    # Get the best parameters and score
-    print("Best parameters:", grid_search.best_params_)
-    print("Best score:", -grid_search.best_score_)  # Convert back to positive MSE
-
-    return grid_search.best_params_
+    # Convert to DMatrix format
+    dtrain = dataframe2DMatrix(X=train_data_dict['X_train'], y=train_data_dict['y_train'][item_to_predict])
+    dval = dataframe2DMatrix(X=train_data_dict['X_val'], y=train_data_dict['y_val'][item_to_predict])
+    
+    # Base parameters that won't be tuned
+    base_params = {
+        'objective': 'reg:squarederror',
+        'tree_method': 'gpu_hist',
+        'eval_metric': ['rmse', 'mae']
+    }
+    
+    # Initialize tracking of best model
+    best_score = float('inf')
+    best_params = None
+    best_num_round = None
+    
+    # Generate all parameter combinations
+    from itertools import product
+    param_names = list(param_grid.keys())
+    param_values = list(param_grid.values())
+    
+    for values in product(*param_values):
+        # Create parameter dictionary for this iteration
+        current_params = dict(zip(param_names, values))
+        current_params.update(base_params)
+        
+        # Extract num_boost_round if present, otherwise use default
+        num_boost_round = current_params.pop('num_boost_round', 100)
+        
+        print(f"\nTrying parameters: {current_params}")
+        print(f"Number of rounds: {num_boost_round}")
+        
+        # Train model with current parameters
+        evals_result = {}
+        model = xgb.train(
+            params=current_params,
+            dtrain=dtrain,
+            num_boost_round=num_boost_round,
+            evals=[(dtrain, 'train'), (dval, 'eval')],
+            early_stopping_rounds=1000,
+            evals_result=evals_result,
+            verbose_eval=False
+        )
+        
+        # Get best validation score
+        final_score = min(evals_result['eval']['rmse'])
+        print(f"Validation RMSE: {final_score:.4f}")
+        
+        # Update best parameters if better score found
+        if final_score < best_score:
+            best_score = final_score
+            best_params = current_params
+            best_num_round = model.best_iteration
+            print("New best score!")
+    
+    best_params['num_boost_round'] = best_num_round
+    print("\nBest parameters found:")
+    print(f"Parameters: {best_params}")
+    print(f"Best RMSE: {best_score:.4f}")
+    
+    return best_params
 
 def XGBRegressor_model(best_params):
     xgbReg_model = XGBRegressor(random_state=42,
