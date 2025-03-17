@@ -86,13 +86,13 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     y = original_df[cols_output]
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y,
-        test_size=0.2,
+        test_size=0.1,
         random_state=42
     )
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_temp, y_temp,
-        test_size=0.2,
+        test_size=0.05,
         random_state=42
     )
 
@@ -119,78 +119,33 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
 def dataframe2DMatrix(X, y=None):
     return xgb.DMatrix(X, label=y)
 
-# def gridSearch_Regressor(train_data_dict, param_grid: dict):
-#     """
-#     Performs grid search cross-validation to find optimal hyperparameters for XGBoost regressor.
-    
-#     Parameters:
-#     -----------
-#     train_data_dict : dict
-#         Dictionary containing training and validation data with keys:
-#         - 'X_train': Training input features
-#         - 'y_train': Training target values
-#         - 'X_val': Validation input features
-#         - 'y_val': Validation target values
-    
-#     param_grid : dict
-#         Dictionary with hyperparameter names as keys and lists of parameter values to try.
-#         Example:
-#         {
-#             'max_depth': [3, 4, 5],
-#             'learning_rate': [0.01, 0.1],
-#             'n_estimators': [100, 200]
-#         }
-    
-#     Returns:
-#     --------
-#     dict
-#         Dictionary containing the best parameters found during grid search
-    
-#     Notes:
-#     ------
-#     - Uses GPU acceleration with 'gpu_hist' tree method
-#     - Performs 3-fold cross-validation
-#     - Uses negative mean squared error as scoring metric
-#     - Utilizes all available CPU cores (n_jobs=-1)
-#     - Prints best parameters and score during execution
-    
-#     Example:
-#     --------
-#     >>> param_grid = {
-#     ...     'max_depth': [3, 4, 5],
-#     ...     'learning_rate': [0.01, 0.1]
-#     ... }
-#     >>> best_params = gridSearch_Regressor(train_data, param_grid)
-#     """
-#     # Initialize the XGBoost regressor
-#     xgb_reg = XGBRegressor(
-#         tree_method='gpu_hist',
-#         enable_categorical=False,
-#     )
+from xgboost.callback import TrainingCallback
 
-#     # Setup GridSearchCV
-#     grid_search = GridSearchCV(
-#         estimator=xgb_reg,
-#         param_grid=param_grid,
-#         scoring='neg_mean_squared_error',  # or 'r2', 'neg_mean_absolute_error'
-#         cv=3,
-#         verbose=2,
-#         n_jobs=-1
-#     )
+class LearningRateDecay(TrainingCallback):
+    """Custom learning rate decay callback for XGBoost"""
+    
+    def __init__(self, initial_lr, decay_factor, decay_rounds):
+        """
+        Parameters:
+        -----------
+        initial_lr : float
+            Initial learning rate
+        decay_factor : float
+            Factor to multiply learning rate by each decay_rounds
+        decay_rounds : int
+            Number of rounds between learning rate updates
+        """
+        self.initial_lr = initial_lr
+        self.decay_factor = decay_factor
+        self.decay_rounds = decay_rounds
+        super().__init__()
 
-#     # Fit the model
-#     grid_search.fit(
-#         train_data_dict['X_train'],
-#         train_data_dict['y_train'],
-#         eval_set=[(train_data_dict['X_val'], train_data_dict['y_val'])],
-#         verbose=True
-#     )
-
-#     # Get the best parameters and score
-#     print("Best parameters:", grid_search.best_params_)
-#     print("Best score:", -grid_search.best_score_)  # Convert back to positive MSE
-
-#     return grid_search.best_params_
+    def after_iteration(self, model, epoch, evals_log):
+        """Called after each iteration"""
+        if (epoch > 0) and (epoch % self.decay_rounds == 0):
+            new_lr = self.initial_lr * (self.decay_factor ** (epoch // self.decay_rounds))
+            model.set_param('learning_rate', new_lr)
+        return False
 
 def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str):
     """
@@ -251,6 +206,15 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         print(f"\nTrying parameters: {current_params}")
         print(f"Number of rounds: {num_boost_round}")
         
+        initial_lr = current_params.get('learning_rate', 0.3)
+        
+        # Create proper callback instance
+        lr_callback = LearningRateDecay(
+            initial_lr=initial_lr,
+            decay_factor=0.98,  # 5% decay
+            decay_rounds=10     # every 50 rounds
+        )
+
         # Train model with current parameters
         evals_result = {}
         model = xgb.train(
@@ -258,9 +222,10 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
             dtrain=dtrain,
             num_boost_round=num_boost_round,
             evals=[(dtrain, 'train'), (dval, 'eval')],
-            early_stopping_rounds=1000,
+            early_stopping_rounds=50,
             evals_result=evals_result,
-            verbose_eval=False
+            verbose_eval=False,
+            callbacks=[lr_callback]
         )
         
         # Get best validation score
