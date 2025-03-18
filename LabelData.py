@@ -338,5 +338,5 @@ class LabelData:
         labelledData.to_csv('/'.join([self.data_output_path, outputfilename]))
 
 if __name__ == '__main__':
-    labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
+    labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30413_no_avg.txt', fixHeader=False)
     labeldata_obj.runLabelling()
