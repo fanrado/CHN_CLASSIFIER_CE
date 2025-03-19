@@ -175,7 +175,7 @@ class TrainBDT:
         params = {
             'learning_rate': 0.1, 'max_depth': 3,
             'objective': 'binary:logistic',
-            'eval_metric': ['logloss', 'auc', 'aucpr', 'f1'],
+            'eval_metric': ['logloss'],
             'tree_method' : 'gpu_hist'
         }
         # Specify evaluation sets
@@ -396,11 +396,11 @@ def main():
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
     #
-    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    #
-    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    # #
+    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
