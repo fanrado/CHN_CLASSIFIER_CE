@@ -5,6 +5,52 @@ from response import response, response_legacy
 import matplotlib.pyplot as plt
 from scipy import integrate, interpolate
 
+class RandomFitParameters:
+    def __init__(self, path_to_data_model: str, dataFile_name: str, output_path: str):
+        self.filename = dataFile_name
+        self.path_to_data_model = path_to_data_model
+        self.output_path = output_path
+        self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.metrics_param = ['integral_R', 'max_deviation']
+
+    def __read_sourcedata(self):
+        """
+            Read labelled MC: waveform -> Fit parameters -> output of response function -> Integral and max deviation of the tails -> classes
+            We are only interested in the fit parameters and the integral and max deviation.
+            The fit parameters are used to determine the range of values needed to randomly generate new values.
+            The integral and max deviation of the tails are used to select new values that fall in the ranges of the references.
+        """
+        data = pd.read_csv('/'.join([self.path_to_data_model, self.filename]))
+        return data
+    
+    def __get_ranges_params(self, ref_data):
+        ## set the seed
+        np.random.seed(42)
+        n_samples = np.power(10,6)
+        generated_params = {p: np.array([]) for p in self.response_params}
+        for key,val in generated_params.items():
+            val_mean = np.mean(ref_data[key])
+            val_std = np.std(ref_data[key])
+            val_generated = np.random.normal(val_mean-3*val_std, val_mean+3*val_std, n_samples)
+            np.random.shuffle(val_generated)
+            generated_params[key] = val_generated
+        return generated_params
+    
+    def runAna(self, plotDist=False):
+        data = self.__read_sourcedata()
+        if plotDist:
+            fig, ax = plt.subplots(1,len(self.response_params), figsize=(8*len(self.response_params), 5))
+            for i, p in enumerate(self.response_params):
+                ax[i].hist(data[p], histtype='step')
+                ax[i].set_title(p)
+            plt.tight_layout()
+            plt.show()
+        new_params = self.__get_ranges_params(ref_data=data)
+        plt.figure()
+        plt.hist(new_params[self.response_params[2]], histtype='step')
+        plt.title(self.response_params[2])
+        plt.show()
+
 class LabelData:
     """
     A class for processing and labeling Channel response data.
@@ -338,5 +384,10 @@ class LabelData:
         labelledData.to_csv('/'.join([self.data_output_path, outputfilename]))
 
 if __name__ == '__main__':
-    labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30413_no_avg.txt', fixHeader=False)
-    labeldata_obj.runLabelling()
+    ## LABELLING THE DATA
+    # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30413_no_avg.txt', fixHeader=False)
+    # labeldata_obj.runLabelling()
+    ##
+    ## RANDOMLY GENERATE THE FIT PARAMETERS
+    rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
+    rndm_fitparams_obj.runAna(plotDist=False)
