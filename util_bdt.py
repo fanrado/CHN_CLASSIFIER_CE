@@ -85,7 +85,7 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     y = original_df[cols_output]
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y,
-        test_size=0.2,
+        test_size=0.1,
         random_state=42
     )
 

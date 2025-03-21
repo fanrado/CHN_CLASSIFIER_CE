@@ -72,12 +72,12 @@ class TrainBDT:
                 dict: Best parameters found during grid search
         """
         param_grid = {
-            'max_depth' : [5, 7, 10, 15, 20, 25, 30, 50],
-            'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
-            'n_estimators': [500],
-            'min_child_weight' : [3],
+            'max_depth' : [5, 7, 10, 15, 20],
+            'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2],
+            'n_estimators': [100, 200],
+            'min_child_weight' : [3, 5, 7],
             'subsample' : [1.0],
-            'colsample_bytree' : [1.0],
+            'colsample_bytree' : [0.8],
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
                                                      item_to_predict=item_to_predict)
@@ -175,10 +175,16 @@ class TrainBDT:
         dtrain = dataframe2DMatrix(classifier_data['X_train'], y=classifier_data['y_train'])
         dval = dataframe2DMatrix(classifier_data['X_val'], y=classifier_data['y_val'])
         # Set parameters
+        # params = {
+        #     'learning_rate': 0.1, 'max_depth': 3,
+        #     'objective': 'binary:logistic',
+        #     'eval_metric': ['logloss', 'error'],
+        #     'tree_method' : 'gpu_hist'
+        # }
         params = {
-            'learning_rate': 0.1, 'max_depth': 3,
+            'learning_rate': 0.05, 'max_depth': 3,
             'objective': 'binary:logistic',
-            'eval_metric': ['logloss', 'error'],
+            'eval_metric': 'logloss',
             'tree_method' : 'gpu_hist'
         }
         #
@@ -198,10 +204,10 @@ class TrainBDT:
         model_classifier = xgb.train(
             params=params,
             dtrain=dtrain,
-            num_boost_round=10000,
+            num_boost_round=1000,
             evals=evals,
-            callbacks=[lr_callback],
-            early_stopping_rounds=100,
+            # callbacks=[lr_callback],
+            early_stopping_rounds=20,
             verbose_eval=True,
         )
         if saveModel:
@@ -402,7 +408,7 @@ def main():
         os.mkdir(output_path)
     except:
         pass
-    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=os.listdir(root_path),
+    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path)],
                        output_path=output_path)
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
@@ -413,16 +419,16 @@ def main():
     cols_output_regressor = ['integral_R', 'max_deviation']
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
-    #
-    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    #
-    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    # #
+    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    # #
+    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
-    xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
+    # xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
 
 if __name__=='__main__':
     main()
