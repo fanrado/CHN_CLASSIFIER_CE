@@ -41,7 +41,6 @@ def one_hot_encode_sklearn(data, column_name):
     
     # Combine with original data
     result = pd.concat([data.drop(column_name, axis=1), encoded_df], axis=1)
-    
     return result
 
 def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_output_regressor=None, cols_output_classifier=None):
@@ -86,13 +85,13 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     y = original_df[cols_output]
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y,
-        test_size=0.1,
+        test_size=0.2,
         random_state=42
     )
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_temp, y_temp,
-        test_size=0.05,
+        test_size=0.2,
         random_state=42
     )
 
@@ -116,8 +115,11 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     }
     return output
 
-def dataframe2DMatrix(X, y=None):
-    return xgb.DMatrix(X, label=y)
+def dataframe2DMatrix(X, y=None, multiOutputClassifier=False):
+    if multiOutputClassifier:
+        return xgb.DMatrix(X, label=y, enable_categorical=True)
+    else:
+        return xgb.DMatrix(X, label=y)
 
 from xgboost.callback import TrainingCallback
 
@@ -181,8 +183,10 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
     # Base parameters that won't be tuned
     base_params = {
         'objective': 'reg:squarederror',
-        'tree_method': 'gpu_hist',
-        'eval_metric': ['rmse', 'mae']
+        # 'tree_method': 'gpu_hist',
+        'tree_method': 'hist',
+        'device': 'cuda',
+        'eval_metric': ['rmse', 'mae', 'mape', 'mphe']
     }
     
     # Initialize tracking of best model
@@ -211,8 +215,8 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.98,  # 5% decay
-            decay_rounds=10     # every 50 rounds
+            decay_factor=0.9,  # 5% decay
+            decay_rounds=20     # every 50 rounds
         )
 
         # Train model with current parameters
@@ -222,7 +226,7 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
             dtrain=dtrain,
             num_boost_round=num_boost_round,
             evals=[(dtrain, 'train'), (dval, 'eval')],
-            early_stopping_rounds=50,
+            early_stopping_rounds=100,
             evals_result=evals_result,
             verbose_eval=False,
             callbacks=[lr_callback]
