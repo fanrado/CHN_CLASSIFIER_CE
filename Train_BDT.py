@@ -42,6 +42,7 @@ class TrainBDT:
                     tmpdata.drop(columns=columns[0], inplace=True)
                 data = pd.concat([data, tmpdata], axis=0)
         return one_hot_encode_sklearn(data=data, column_name='class')
+        # return data
     
     def split_data(self, cols_input: list, cols_output: list, cols_output_regressor: list,
                    cols_output_classifier: list):
@@ -71,12 +72,12 @@ class TrainBDT:
                 dict: Best parameters found during grid search
         """
         param_grid = {
-            'max_depth' : [5, 7, 10, 15, 20],
-            'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2],
-            'n_estimators': [100, 200],
-            'min_child_weight' : [3, 5, 7],
+            'max_depth' : [5, 7, 10, 15, 20, 25, 30, 50],
+            'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
+            'n_estimators': [500],
+            'min_child_weight' : [3],
             'subsample' : [1.0],
-            'colsample_bytree' : [0.8],
+            'colsample_bytree' : [1.0],
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
                                                      item_to_predict=item_to_predict)
@@ -106,7 +107,7 @@ class TrainBDT:
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.98,  # 5% decay
+            decay_factor=0.9,  # 5% decay
             decay_rounds=10     # every 50 rounds
         )
 
@@ -149,8 +150,10 @@ class TrainBDT:
         #
         # Comparison between true values and predictions
         plt.figure()
-        plt.hist(pred_df[item_to_predict], histtype='step', bins=100, label='max_deviation prediction')
-        plt.hist(regressor_data['y_test'][item_to_predict], histtype='step', bins=100, label='max_deviation true')
+        plt.hist(pred_df[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} prediction')
+        plt.hist(regressor_data['y_test'][item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} true')
+        plt.xlabel(item_to_predict)
+        plt.ylabel('#')
         plt.legend()
         plt.grid(True)
         # plt.show()
@@ -175,9 +178,10 @@ class TrainBDT:
         params = {
             'learning_rate': 0.1, 'max_depth': 3,
             'objective': 'binary:logistic',
-            'eval_metric': ['logloss'],
+            'eval_metric': ['logloss', 'error'],
             'tree_method' : 'gpu_hist'
         }
+        #
         # Specify evaluation sets
         evals = [(dtrain, 'train'), (dval, 'validation')]
 
@@ -187,7 +191,7 @@ class TrainBDT:
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
             decay_factor=0.9,  # 5% decay
-            decay_rounds=20     # every 50 rounds
+            decay_rounds=10     # every 50 rounds
         )
 
         # Train model
@@ -198,7 +202,7 @@ class TrainBDT:
             evals=evals,
             callbacks=[lr_callback],
             early_stopping_rounds=100,
-            verbose_eval=True
+            verbose_eval=True,
         )
         if saveModel:
             model_classifier.save_model(f'{self.output_path}/classifier_resp_model.json')
@@ -296,7 +300,7 @@ class TrainBDT:
         columns = [c for c in input_classifier_df.columns if 'class' in c]
         for c in columns:
             class_df = input_classifier_df[input_classifier_df[c]==1.0]
-            fig, ax = plt.subplots(1,2, figsize=(5*2, 5))
+            fig, ax = plt.subplots(1,2, figsize=(8*2, 8))
             h1 = ax[0].hist2d(class_df['integral_R'], class_df['true_integral_R'], 
                     bins=30, norm=LogNorm(),cmap='viridis')
             cbar1 = plt.colorbar(h1[3])
@@ -312,13 +316,15 @@ class TrainBDT:
             ax[1].set_xlabel('predicted max_deviation')
             ax[1].set_ylabel('true max_deviation')
             ax[1].set_title(c)
+
+            plt.tight_layout()
             plt.savefig(f'{output_plot_path}/{c}_2dCorr.png')
             plt.close()
         #
         # 1D plots of the difference between prediction and truth
         for c in columns:
             class_df = input_classifier_df[input_classifier_df[c]==1.0]
-            fig, ax = plt.subplots(1,2,figsize=(5*2,5))
+            fig, ax = plt.subplots(1,2,figsize=(8*2,8))
             ax[0].hist(class_df['integral_R'] - class_df['true_integral_R'], histtype='step')
             ax[0].set_xlabel('predicted - true values')
             ax[0].set_ylabel('#')
@@ -330,6 +336,7 @@ class TrainBDT:
             ax[1].set_ylabel('#')
             ax[1].set_title(f'{c} : max_deviation')
             ax[1].grid(True)
+            plt.tight_layout()
             plt.savefig(f'{output_plot_path}/{c}_1dDiff.png')
         ##
         ## Attempt to classify
@@ -346,6 +353,7 @@ class TrainBDT:
         X_cols = [cl for cl in input_classifier_df.columns if 'class' not in cl]
         test_df = pd.concat([input_classifier_df[X_cols], pd.DataFrame(input_classifier_df[columns].idxmax(axis=1), columns=['trueClass']), predClass_df['predicted_class']], axis=1)
         #
+        test_df.to_csv(f'{output_plot_path}/classification_of_predictedMaxDev_IntR.csv', index=True)
         # Overall accuracy of the classification
         Accuracy = (np.sum(test_df['trueClass']==test_df['predicted_class'])/len(test_df['trueClass']))*100
         print(f'Accuracy of the prediction = {np.round(Accuracy,5)}%')
@@ -378,6 +386,16 @@ def main():
         Main function to demonstrate the usage of TrainBDT class.
         Trains and evaluates both regressor and classifier models.
     """
+    plt.rcParams.update({
+            'font.size': 18,
+            'axes.titlesize': 15,
+            'axes.labelsize': 15,
+            'xtick.labelsize': 18,
+            'ytick.labelsize': 18,
+            'legend.fontsize': 18,
+            'figure.titlesize': 20
+        })
+    
     root_path = 'data/labelledData'
     output_path = 'OUTPUT'
     try:
@@ -389,18 +407,18 @@ def main():
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
     
-    # cols_input = ['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
-    cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
+    cols_input = ['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+    # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
     cols_output = cols_output_classifier + ['integral_R', 'max_deviation']
     cols_output_regressor = ['integral_R', 'max_deviation']
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
     #
-    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    # #
-    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    #
+    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
