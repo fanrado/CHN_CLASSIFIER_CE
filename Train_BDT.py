@@ -402,13 +402,16 @@ def main():
             'figure.titlesize': 20
         })
     
-    root_path = 'data/labelledData'
+    # root_path = 'data/labelledData'
+    root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT'
     try:
         os.mkdir(output_path)
     except:
         pass
-    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path)],
+    # xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('30413' in f)],
+    #                    output_path=output_path)
+    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if '.csv' in f],
                        output_path=output_path)
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
@@ -420,15 +423,15 @@ def main():
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
     # #
-    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    # #
-    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    #
+    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
-    # xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
+    xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
 
 if __name__=='__main__':
     main()
