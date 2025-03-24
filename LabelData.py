@@ -235,10 +235,18 @@ class LabelData:
         """
         self.source_data['integral_R'] = integrals_R
         self.source_data['max_deviation'] = max_deviations
-        class1_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] < 0)
-        class2_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] > 0)
-        class3_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] < 0)
+        # cuts before March 22, 2025
+        # class1_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] < 0)
+        # class2_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] > 0)
+        # class3_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] < 0)
+        # class4_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] > 0)
+
+        # FIX THE CONDITIONS DEFINING EACH CLASS
+        class1_mask = (self.source_data['integral_R'] < 0) & (self.source_data['max_deviation'] < 0) # didn't have <0 before March 22. The <=0 included a conflict with class2
+        class2_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] > 0) 
+        class3_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] <= 0) # didn't have <=0 before March 22
         class4_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] > 0)
+    
         class1_df = self.source_data[class1_mask].copy().reset_index().drop('index', axis=1)
         class2_df = self.source_data[class2_mask].copy().reset_index().drop('index', axis=1)
         class3_df = self.source_data[class3_mask].copy().reset_index().drop('index', axis=1)
@@ -385,9 +393,9 @@ class LabelData:
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
-    # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30413_no_avg.txt', fixHeader=False)
-    # labeldata_obj.runLabelling()
+    labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
+    labeldata_obj.runLabelling()
     ##
     ## RANDOMLY GENERATE THE FIT PARAMETERS
-    rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
-    rndm_fitparams_obj.runAna(plotDist=False)
+    # rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
+    # rndm_fitparams_obj.runAna(plotDist=False)
