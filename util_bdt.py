@@ -34,8 +34,8 @@ def one_hot_encode_sklearn(data, column_name):
     # Create new column names
     feature_names = encoder.get_feature_names_out([column_name])
 
-    print(encoded)
-    print(feature_names)
+    # print(encoded)
+    # print(feature_names)
     # Create DataFrame with encoded values
     encoded_df = pd.DataFrame(encoded, columns=feature_names, index=data.index)
     
@@ -97,12 +97,12 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
 
     output = {
         'regressor' : {
-            'X_train': X_train,# / X_train.max(),
-            'y_train': y_train[cols_output_regressor],# / y_train[cols_output_regressor].max(),
-            'X_val' : X_val,# / X_val.max(),
-            'y_val' : y_val[cols_output_regressor],# / y_val[cols_output_regressor].max(),
-            'X_test' : X_test,# / X_test.max(),
-            'y_test' : y_test[cols_output_regressor],# / y_test[cols_output_regressor].max()
+            'X_train': X_train,# / np.abs(X_train).max(),
+            'y_train': y_train[cols_output_regressor],# / np.abs(y_train[cols_output_regressor]).max(),
+            'X_val' : X_val,# / np.abs(X_val).max(),
+            'y_val' : y_val[cols_output_regressor],# / np.abs(y_val[cols_output_regressor]).max(),
+            'X_test' : X_test,# / np.abs(X_test).max(),
+            'y_test' : y_test[cols_output_regressor],# / np.abs(y_test[cols_output_regressor]).max()
         },
         'classifier' : {
             'X_train' : y_train[cols_output_regressor],
@@ -184,9 +184,10 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
     base_params = {
         'objective': 'reg:squarederror',
         # 'tree_method': 'gpu_hist',
+        'num_boost_round': 100,
         'tree_method': 'hist',
         'device': 'cuda',
-        'eval_metric': ['rmse', 'mae', 'mape', 'mphe']
+        'eval_metric': 'rmse'
     }
     
     # Initialize tracking of best model
@@ -215,8 +216,8 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.9,  # 5% decay
-            decay_rounds=20     # every 50 rounds
+            decay_factor=0.95,  # 5% decay
+            decay_rounds=10     # every 50 rounds
         )
 
         # Train model with current parameters
