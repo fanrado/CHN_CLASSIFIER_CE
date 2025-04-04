@@ -16,18 +16,18 @@ class RandomFitParameters:
     def __read_sourcedata(self):
         """
             Read labelled MC: waveform -> Fit parameters -> output of response function -> Integral and max deviation of the tails -> classes
-            We are only interested in the fit parameters and the integral and max deviation.
+            We are only interested in the fit parameters, the integral and max deviation.
             The fit parameters are used to determine the range of values needed to randomly generate new values.
             The integral and max deviation of the tails are used to select new values that fall in the ranges of the references.
         """
-        data = pd.read_csv('/'.join([self.path_to_data_model, self.filename]))
+        data = pd.read_csv('/'.join([self.path_to_data_model, self.filename]))[self.response_params + self.metrics_param]
         return data
     
     def __get_ranges_params(self, ref_data):
         ## set the seed
         np.random.seed(42)
         n_samples = np.power(10,6)
-        generated_params = {p: np.array([]) for p in self.response_params}
+        generated_params = {p: np.array([]) for p in self.response_params+self.metrics_param}
         for key,val in generated_params.items():
             val_mean = np.mean(ref_data[key])
             val_std = np.std(ref_data[key])
@@ -46,10 +46,13 @@ class RandomFitParameters:
             plt.tight_layout()
             plt.show()
         new_params = self.__get_ranges_params(ref_data=data)
-        plt.figure()
-        plt.hist(new_params[self.response_params[2]], histtype='step')
-        plt.title(self.response_params[2])
-        plt.show()
+        print(new_params.keys())
+        for p in new_params.keys():
+            plt.figure()
+            plt.hist(new_params[p], histtype='step')
+            plt.title(p)
+            plt.savefig(f'tmp/{p}.png')
+            plt.close()
 
 class LabelData:
     """
@@ -58,7 +61,7 @@ class LabelData:
     and classifying Channel responses into different categories based on their
     integral values and maximum deviations from ideal responses.
     """
-    def __init__(self, root_path: str, filename: str, fixHeader=False):
+    def __init__(self, root_path: str, filename: str, fixHeader=False, sep='\t'):
         """
             Initialize the LabelData object.
             
@@ -71,7 +74,7 @@ class LabelData:
         self.root_path = root_path
         self.filename = filename
         
-        self.source_data = self.__read_sourcedata()
+        self.source_data = self.__read_sourcedata(sep=sep)
         self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
         self.Fig_output_path = '/'.join([self.root_path, filename.split('.')[0]+'_fig'])
         self.data_output_path = '/'.join([self.root_path, 'labelledData'])
@@ -84,7 +87,7 @@ class LabelData:
         except:
             pass
 
-    def __read_sourcedata(self):
+    def __read_sourcedata(self, sep='\t'):
         """
             Read and preprocess the source data from a TSV file (the data we have are saved in a txt format but have tab as separation of the columns).
             Handles column name cleaning and header fixing if needed.
@@ -92,7 +95,7 @@ class LabelData:
             Returns:
                 pandas.DataFrame: Preprocessed source data
         """
-        data = pd.read_csv('/'.join([self.root_path, self.filename]), sep='\t')
+        data = pd.read_csv('/'.join([self.root_path, self.filename]), sep=sep)
         data.columns = data.columns.str.strip().str.replace(' ', '')
         if self.fixHeader:
             columns = data.columns
@@ -180,9 +183,13 @@ class LabelData:
             y1 = R[pos_peak+6:]
             x2 = x[pos_peak+6:]
             y2 = R_ideal[pos_peak+6:]
-            x_intersect, y_intersect = self.find_intersection(x1,y1,x2, y2)
+            try:
+                x_intersect, y_intersect = self.find_intersection(x1,y1,x2, y2)
+            except:
+                continue
             # select data between pos_peak+6 and x_intersect
-            mask = x1 <= x_intersect
+            # mask = x1 <= x_intersect
+            mask = x1 <= x[pos_peak+50] # what if not finding the intersection ==> fixing the integration domain
             x_selected = x1[mask]
             R_selected = y1[mask]
             R_ideal_selected = y2[mask]
@@ -198,7 +205,8 @@ class LabelData:
             deviations = R_avg - R_ideal_avg
             # deviations = R_avg - R_ideal_avg
             max_deviation = np.max(deviations)
-            if np.abs(np.min(deviations)) > np.max(deviations):
+            # if np.abs(np.min(deviations)) > np.max(deviations):
+            if np.abs(np.min(deviations)) > np.abs(np.max(deviations)):
                 max_deviation = np.min(deviations)
             max_deviations.append(max_deviation)
             # time_peaks_diff.append(x[np.argmax(R)] - x[pos_peak])
@@ -393,9 +401,14 @@ class LabelData:
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
-    labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
-    labeldata_obj.runLabelling()
+    # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
+    # labeldata_obj.runLabelling()
+    list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results')]
+    # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
+    for f in list_file_source:
+        labeldata_obj = LabelData(root_path='data/fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
+        labeldata_obj.runLabelling()
     ##
     ## RANDOMLY GENERATE THE FIT PARAMETERS
-    # rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
+    # rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData_after_March22_2025', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
     # rndm_fitparams_obj.runAna(plotDist=False)
