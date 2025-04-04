@@ -182,10 +182,11 @@ class TrainBDT:
         #     'tree_method' : 'gpu_hist'
         # }
         params = {
-            'learning_rate': 0.05, 'max_depth': 3,
+            'learning_rate': 0.1, 'max_depth': 100,
             'objective': 'binary:logistic',
             'eval_metric': 'logloss',
-            'tree_method' : 'gpu_hist'
+            'tree_method' : 'hist',
+            'device': 'cuda'
         }
         #
         # Specify evaluation sets
@@ -197,7 +198,7 @@ class TrainBDT:
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
             decay_factor=0.9,  # 5% decay
-            decay_rounds=10     # every 50 rounds
+            decay_rounds=30     # every 50 rounds
         )
 
         # Train model
@@ -206,8 +207,8 @@ class TrainBDT:
             dtrain=dtrain,
             num_boost_round=1000,
             evals=evals,
-            # callbacks=[lr_callback],
-            early_stopping_rounds=20,
+            callbacks=[lr_callback],
+            early_stopping_rounds=50,
             verbose_eval=True,
         )
         if saveModel:
@@ -402,8 +403,8 @@ def main():
             'figure.titlesize': 20
         })
     
-    # root_path = 'data/labelledData'
-    root_path = 'data/labelledData_after_March22_2025'
+    root_path = 'data/labelledData'
+    # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT'
     try:
         os.mkdir(output_path)
@@ -411,7 +412,7 @@ def main():
         pass
     # xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('30413' in f)],
     #                    output_path=output_path)
-    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if '.csv' in f],
+    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('extended' not in f) and ('test' not in f)],
                        output_path=output_path)
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
@@ -423,11 +424,11 @@ def main():
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
     # #
-    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    #
-    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    # #
+    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
