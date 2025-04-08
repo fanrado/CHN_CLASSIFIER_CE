@@ -105,11 +105,11 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
             'y_test' : y_test[cols_output_regressor],# / np.abs(y_test[cols_output_regressor]).max()
         },
         'classifier' : {
-            'X_train' : y_train[cols_output_regressor],
+            'X_train' : y_train[cols_output_regressor],# / np.abs(y_train[cols_output_regressor]).max(),
             'y_train' : y_train[cols_output_classifier],
-            'X_val' : y_val[cols_output_regressor],
+            'X_val' : y_val[cols_output_regressor],# / np.abs(y_val[cols_output_regressor]).max(),
             'y_val' : y_val[cols_output_classifier],
-            'X_test' : y_test[cols_output_regressor],
+            'X_test' : y_test[cols_output_regressor],# / np.abs(y_test[cols_output_regressor]).max(),
             'y_test' : y_test[cols_output_classifier]
         }
     }
@@ -258,6 +258,33 @@ def XGBRegressor_model(best_params):
     modelRegressor = MultiOutputRegressor(xgbReg_model)
     return modelRegressor
 
+#-----------------------------
+## Implementation of the Kernel Density Estimation
+## Current kernel function available: gaussian
+class KernelDensityEstimation:
+    def __init__(self, data=None, kernel_func='gaussian', bw=0.1):
+        self.kernel_func = kernel_func
+        self.data = data
+        self.bandwidth = bw
 
-
-
+    def __kernel_func(self, x, xi, bw):
+        if self.kernel_func=='gaussian':
+            c1 = 1/(bw*np.sqrt(2*np.pi))
+            c2 = np.exp(-0.5*np.power((x-xi)/(bw), 2))
+            return c1*c2 
+    
+    def eval_density(self, x):
+        out = 0
+        N = len(self.data)
+        for i in range(N):
+            out += self.__kernel_func(x=x, xi=self.data[i], bw=self.bandwidth)
+        out = out / N
+        return out
+    
+    def resample(self, N_samples=None):
+        if N_samples is None:
+            print("Invalid Number of samples.")
+            return None
+        x_grid = np.linspace(np.min(self.data), np.max(self.data), N_samples)
+        new_samples = self.eval_density(x=x_grid)
+        return x_grid, new_samples
