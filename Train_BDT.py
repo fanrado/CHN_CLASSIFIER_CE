@@ -41,6 +41,7 @@ class TrainBDT:
                 if columns[0] != '#Ch.#':
                     tmpdata.drop(columns=columns[0], inplace=True)
                 data = pd.concat([data, tmpdata], axis=0)
+        data.sample(frac=1)
         return one_hot_encode_sklearn(data=data, column_name='class')
         # return data
     
@@ -275,14 +276,23 @@ class TrainBDT:
         # read the data that were predicted by the regressor models
         data = pd.DataFrame()
         for i,f in enumerate(listfilenames):
-            tmpdata = pd.read_csv('/'.join([self.output_path, f])).reset_index().drop(columns='index', inplace=False)
+            tmpdata = pd.read_csv('/'.join([self.output_path, f]))#.reset_index().drop(columns='index', inplace=False)
             columns = tmpdata.columns
             tmpdata.columns = ['index', columns[1]]
+            tmpdata.index = tmpdata['index']
+            tmpdata.drop(columns='index', inplace=True)
+            tmpdata.index.name = None
             if i==0:
                 data = tmpdata.copy()
+                # data.index = data['index']
+                # data.drop(columns='index', inplace=True)
+                # data.index.name = None
             else:
-                data = pd.merge(data, tmpdata, on='index', how='inner')
-        data = data.reset_index().drop(columns='level_0', inplace=False)
+                # data = pd.merge(data, tmpdata, on='index', how='inner')
+                data = pd.concat([data, tmpdata], axis=1, join='outer')
+                # print(data)
+                # sys.exit()
+        # data = data.reset_index().drop(columns='level_0', inplace=False)
         columns = []
         for c in data.columns:
             if c!= 'index':
@@ -291,12 +301,14 @@ class TrainBDT:
                 columns.append(c)
         # Truth information
         classifier_data = self.splitted_data['classifier']
-        c = classifier_data['X_test'].copy().reset_index()
+        c = classifier_data['X_test'].copy()#.reset_index()
         c.columns = columns
-        input_classifier_df  = pd.merge(data, c, on='index', how='inner')
-        input_classifier_df = pd.merge(input_classifier_df,  classifier_data['y_test'].reset_index(), on='index', how='inner')
-        input_classifier_df = input_classifier_df.set_index('index', drop=True)
-        input_classifier_df.index.name = None
+        # input_classifier_df  = pd.merge(data, c, on='index', how='inner')
+        input_classifier_df = pd.concat([data, c], axis=1, join='outer')
+        # input_classifier_df = pd.merge(input_classifier_df,  classifier_data['y_test'].reset_index(), on='index', how='inner')
+        input_classifier_df = pd.concat([input_classifier_df, classifier_data['y_test']], axis=1, join='outer')
+        # input_classifier_df = input_classifier_df.set_index('index', drop=True)
+        # input_classifier_df.index.name = None
         #
         # 2D correlation plots between truth and predicted values from the regression models
         output_plot_path = f'{self.output_path}/plots'
@@ -388,6 +400,123 @@ class TrainBDT:
         plt.tight_layout()
         plt.savefig(f'{output_plot_path}/confusionMatrix_onOutputRegressor.png')
 
+def TestClassifier(path_to_model, path_to_data, datakey, colsInput=['integral_R', 'max_deviation'], trueInput=True, output_path=None):
+    """
+        datakey: is a key in the filename unique for the dataset.
+        trueInput should be set to False when using an unlabelled dataset.
+    """
+    output_plot_path = f'{output_path}/plots'
+    try:
+        os.mkdir(output_plot_path)
+    except:
+        pass
+    # read data
+    data = pd.DataFrame()
+    listfiles = [f for f in os.listdir(path_to_data) if (datakey in f) and ('.csv' in f)]
+    if trueInput:
+        for i, f in enumerate(listfiles):
+            if i==0:
+                data = pd.read_csv(f'{path_to_data}/{f}')
+            else:
+                data = pd.concat([data, pd.read_csv(f'{path_to_data}/{f}')], axis=0)
+        data = one_hot_encode_sklearn(data=data, column_name='class')
+        data.drop(columns='Unnamed: 0', inplace=True)
+    else:
+        for i, f in enumerate(listfiles):
+            if i==0:
+                data = pd.read_csv(f'{path_to_data}/{f}')
+            else:
+                data = pd.merge(data, pd.read_csv(f'{path_to_data}/{f}'), how='inner', on=['#Ch.#', 'class'])
+    data = one_hot_encode_sklearn(data=data, column_name='class')
+    # load model
+    dtest_fromPrediction = dataframe2DMatrix(data[colsInput])
+    classifier_model = xgb.Booster()
+    classifier_model.load_model(path_to_model)
+    pred_classes = classifier_model.predict(dtest_fromPrediction)
+    #
+    columns = [cl for cl in data.columns if 'class' in cl]
+    predClass_df = pd.DataFrame(pred_classes, index=data.index, columns=columns)
+    predClass_df['predicted_class'] = predClass_df.idxmax(axis=1)
+    #
+    #
+    X_cols = [cl for cl in data.columns if 'class' not in cl]
+    test_df = pd.concat([data[X_cols], pd.DataFrame(data[columns].idxmax(axis=1), columns=['trueClass']), predClass_df['predicted_class']], axis=1, join='inner')
+    #
+    test_df.to_csv(f'{output_plot_path}/classification_of_predictedMaxDev_IntR.csv', index=False)
+    # Overall accuracy of the classification
+    Accuracy = (np.sum(test_df['trueClass']==test_df['predicted_class'])/len(test_df['trueClass']))*100
+    print(f'Accuracy of the prediction = {np.round(Accuracy,5)}%')
+    #
+    # Create confusion matrix
+    cm = confusion_matrix(y_true=test_df['trueClass'], y_pred=test_df['predicted_class'])
+
+    # Create a figure and axis
+    plt.figure(figsize=(10, 8))
+
+    # Create heatmap
+    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    sns.heatmap(cm_normalized, annot=True, fmt='.1%', cmap='crest',
+                xticklabels=columns,
+                yticklabels=columns)
+
+    # Add labels
+    plt.xlabel('Predicted Class')
+    plt.ylabel('True Class')
+    plt.title('Confusion Matrix')
+
+    # Show plot
+    plt.tight_layout()
+    plt.savefig(f'{output_plot_path}/confusionMatrix_onOutputRegressor.png')
+    plt.close()
+
+def TestRegressor(path_to_model, path_to_data, datakey, colsInput=['A_0', 'k3'], isValidation=True, output_path=None, item_to_predict='integral_R'):
+    """
+        datakey: is a key in the filename unique for the dataset.
+        isValidation should be set to False when using an unlabelled dataset.
+    """
+    output_plot_path = f'{output_path}/plots'
+    try:
+        os.mkdir(output_plot_path)
+    except:
+        pass
+    # read data
+    data = pd.DataFrame()
+    listfiles = [f for f in os.listdir(path_to_data) if (datakey in f) and ('.csv' in f)]    
+    for i, f in enumerate(listfiles):
+        if i==0:
+            data = pd.read_csv(f'{path_to_data}/{f}')
+        else:
+            data = pd.concat([data, pd.read_csv(f'{path_to_data}/{f}')], axis=0)
+    data_copy = data.copy()
+    data = one_hot_encode_sklearn(data=data, column_name='class')
+    dtest_fromPrediction = dataframe2DMatrix(data[colsInput])
+    #
+    regressor_model = xgb.Booster()
+    regressor_model.load_model(path_to_model)
+    predictions = regressor_model.predict(dtest_fromPrediction)
+    # MSE
+    mse = mean_absolute_error(data[item_to_predict], pd.DataFrame(predictions, columns=[item_to_predict]))
+    print(f'MSE = {mse}')
+    #
+    # predictions in a dataframe
+    pred_df = pd.DataFrame(predictions, columns=[item_to_predict], index=data[item_to_predict].index)
+    columns = [cl for cl in data.columns if 'class' in cl]
+
+    pred_df = pd.concat([pred_df, data['#Ch.#'], data_copy['class']], axis=1, join='outer')
+    pred_df.to_csv(f'{output_path}/{item_to_predict}_predicted.csv', index=False)
+    #
+    # Comparison between true values and predictions
+    plt.figure()
+    plt.hist(pred_df[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} prediction')
+    plt.hist(data[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} true')
+    plt.xlabel(item_to_predict)
+    plt.ylabel('#')
+    plt.legend()
+    plt.grid(True)
+    # plt.show()
+    plt.savefig(f'{output_path}/plots/{item_to_predict}_comparison_True_Prediction.png')
+    plt.close()
+
 def main():
     """
         Main function to demonstrate the usage of TrainBDT class.
@@ -405,34 +534,40 @@ def main():
     
     root_path = 'data/labelledData'
     # root_path = 'data/labelledData_after_March22_2025'
-    output_path = 'OUTPUT'
+    output_path = 'OUTPUT/synthetic'
     try:
         os.mkdir(output_path)
     except:
         pass
     # xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('30413' in f)],
     #                    output_path=output_path)
-    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('extended' not in f) and ('test' not in f)],
+    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('kde' not in f)],
                        output_path=output_path)
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
+    # cols_output_classifier = ['class_c2', 'class_c3']
     
     cols_input = ['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
-    # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
+    # # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
     cols_output = cols_output_classifier + ['integral_R', 'max_deviation']
     cols_output_regressor = ['integral_R', 'max_deviation']
     xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
                          cols_output_regressor=cols_output_regressor)
     # #
-    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    # #
-    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    #
+    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
     classifier_model = xgb_obj.ClassifierModel(saveModel=True)
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
     xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
-
+    ##
+    ## TESTING AFTER THE MODELS ARE TRAINED
+    TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
+    TestRegressor(path_to_model='OUTPUT/synthetic/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='max_deviation')
+    TestClassifier(path_to_model='OUTPUT/synthetic/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
+                   output_path='OUTPUT/synthetic')
 if __name__=='__main__':
     main()
