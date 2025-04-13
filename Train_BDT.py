@@ -30,6 +30,7 @@ class TrainBDT:
         """
         data = pd.DataFrame()
         for i, f in enumerate(self.list_training_files):
+            print(f, self.source_data_path)
             if i==0:
                 data = pd.read_csv('/'.join([self.source_data_path, f]))
                 columns = data.columns
@@ -41,7 +42,34 @@ class TrainBDT:
                 if columns[0] != '#Ch.#':
                     tmpdata.drop(columns=columns[0], inplace=True)
                 data = pd.concat([data, tmpdata], axis=0)
-        data.sample(frac=1)
+        # print(data.max())
+        integral = data['integral_R']
+        
+        # median = integral.median()
+        # print(integral.median())
+        # print(data[np.abs(data['integral_R']) < integral.mean()/1e45].describe())
+        # plt.figure()
+        # plt.hist(data['integral_R'][np.abs(data['integral_R']) < integral.mean()/1e39], bins=100, histtype='step')
+        # # plt.xscale('log')
+        # # plt.yscale('log')
+        # plt.show()
+        # sys.exit()
+        # data = data[np.abs(data['integral_R']) < integral.mean()/1e39] # drop large numbers > 1e39
+        # max_dev = data['max_deviation']
+        # plt.figure()
+        # plt.hist(data['max_deviation'][np.abs(data['max_deviation']) < max_dev.mean()+5*max_dev.std()], bins=100, histtype='step')
+        # plt.show()
+        # sys.exit()
+        # data = data[np.abs(data['max_deviation']) < max_dev.mean()+5*max_dev.std()]
+        # plt.figure()
+        # plt.hist(data['integral_R'], bins=100, histtype='step')
+        # plt.title('integral_R')
+        # plt.show()
+        # #
+        # plt.hist(data['max_deviation'], bins=100, histtype='step')
+        # plt.title('max_deviation')
+        # plt.show()
+        # sys.exit()
         return one_hot_encode_sklearn(data=data, column_name='class')
         # return data
     
@@ -60,6 +88,24 @@ class TrainBDT:
         self.cols_output_regressor = cols_output_regressor
         self.splitted_data = train_valid_test(original_df=self.data, cols_input=cols_input, cols_output=cols_output,
                                 cols_output_classifier=cols_output_classifier, cols_output_regressor=cols_output_regressor)
+        ###
+        # ### print number of each class 
+        print(f'training : {len(self.splitted_data['classifier']['y_train'])}')
+        print(f'training class_c1 : {len(self.splitted_data['classifier']['y_train'][self.splitted_data['classifier']['y_train']['class_c1']==1.0])}')
+        print(f'training class_c2 : {len(self.splitted_data['classifier']['y_train'][self.splitted_data['classifier']['y_train']['class_c2']==1.0])}')
+        print(f'training class_c3 : {len(self.splitted_data['classifier']['y_train'][self.splitted_data['classifier']['y_train']['class_c3']==1.0])}')
+        print(f'training class_c4 : {len(self.splitted_data['classifier']['y_train'][self.splitted_data['classifier']['y_train']['class_c4']==1.0])}')
+        #
+        print(f'validation class_c1 : {len(self.splitted_data['classifier']['y_val'][self.splitted_data['classifier']['y_val']['class_c1']==1.0])}')
+        print(f'validation class_c2 : {len(self.splitted_data['classifier']['y_val'][self.splitted_data['classifier']['y_val']['class_c2']==1.0])}')
+        print(f'validation class_c3 : {len(self.splitted_data['classifier']['y_val'][self.splitted_data['classifier']['y_val']['class_c3']==1.0])}')
+        print(f'validation class_c4 : {len(self.splitted_data['classifier']['y_val'][self.splitted_data['classifier']['y_val']['class_c4']==1.0])}')
+        #
+        print(f'testing class_c1 : {len(self.splitted_data['classifier']['y_test'][self.splitted_data['classifier']['y_test']['class_c1']==1.0])}')
+        print(f'testing class_c2 : {len(self.splitted_data['classifier']['y_test'][self.splitted_data['classifier']['y_test']['class_c2']==1.0])}')
+        print(f'testing class_c3 : {len(self.splitted_data['classifier']['y_test'][self.splitted_data['classifier']['y_test']['class_c3']==1.0])}')
+        print(f'testing class_c4 : {len(self.splitted_data['classifier']['y_test'][self.splitted_data['classifier']['y_test']['class_c4']==1.0])}')
+        input('Press enter to continue....')
 
     def __regressor_GridSearch(self, splitted_data_regressor: dict, item_to_predict: str):
         """
@@ -73,12 +119,18 @@ class TrainBDT:
                 dict: Best parameters found during grid search
         """
         param_grid = {
-            'max_depth' : [5, 7, 10, 15, 20],
-            'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2],
-            'n_estimators': [100, 200],
-            'min_child_weight' : [3, 5, 7],
-            'subsample' : [1.0],
-            'colsample_bytree' : [0.8],
+            # 'max_depth' : [5, 7, 10, 15, 20],
+            # 'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2],
+            # 'n_estimators': [100, 200],
+            # 'min_child_weight' : [3, 5, 7],
+            # 'subsample' : [1.0],
+            # 'colsample_bytree' : [0.8],
+            'max_depth': [30],
+            'learning_rate': [0.4],
+            # 'n_estimators': [100],
+            'min_child_weight' : [30, 40],
+            'subsample': [1.0],
+            'colsample_bytree': [0.8]
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
                                                      item_to_predict=item_to_predict)
@@ -108,14 +160,14 @@ class TrainBDT:
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.9,  # 5% decay
-            decay_rounds=10     # every 50 rounds
+            decay_factor=0.75,  # 5% decay
+            decay_rounds=20     # every 50 rounds
         )
 
         xgb_regressor = xgb.train(params=best_params_regressor,
                           dtrain=dtrain,
                           evals=[(dtrain, 'train'), (dvalid, 'eval')],
-                          early_stopping_rounds=50,
+                          early_stopping_rounds=100,
                           evals_result=eval_results,
                           callbacks=[lr_callback],
                           verbose_eval=True)
@@ -183,11 +235,12 @@ class TrainBDT:
         #     'tree_method' : 'gpu_hist'
         # }
         params = {
-            'learning_rate': 0.1, 'max_depth': 100,
+            'learning_rate': 0.4, 'max_depth': 30,
+            'min_child_weight': 30,
             'objective': 'binary:logistic',
             'eval_metric': 'logloss',
             'tree_method' : 'hist',
-            'device': 'cuda'
+            'device': 'cuda',
         }
         #
         # Specify evaluation sets
@@ -198,8 +251,8 @@ class TrainBDT:
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.9,  # 5% decay
-            decay_rounds=30     # every 50 rounds
+            decay_factor=0.6,  # 5% decay
+            decay_rounds=20     # every 50 rounds
         )
 
         # Train model
@@ -209,7 +262,7 @@ class TrainBDT:
             num_boost_round=1000,
             evals=evals,
             callbacks=[lr_callback],
-            early_stopping_rounds=50,
+            early_stopping_rounds=100,
             verbose_eval=True,
         )
         if saveModel:
@@ -428,8 +481,11 @@ def TestClassifier(path_to_model, path_to_data, datakey, colsInput=['integral_R'
             else:
                 data = pd.merge(data, pd.read_csv(f'{path_to_data}/{f}'), how='inner', on=['#Ch.#', 'class'])
     data = one_hot_encode_sklearn(data=data, column_name='class')
+    # tmp = data[colsInput].copy()
+    # tmp = tmp / np.abs(tmp).max()
     # load model
     dtest_fromPrediction = dataframe2DMatrix(data[colsInput])
+    # dtest_fromPrediction = dataframe2DMatrix(tmp)
     classifier_model = xgb.Booster()
     classifier_model.load_model(path_to_model)
     pred_classes = classifier_model.predict(dtest_fromPrediction)
@@ -489,11 +545,11 @@ def TestRegressor(path_to_model, path_to_data, datakey, colsInput=['A_0', 'k3'],
             data = pd.concat([data, pd.read_csv(f'{path_to_data}/{f}')], axis=0)
     data_copy = data.copy()
     data = one_hot_encode_sklearn(data=data, column_name='class')
-    dtest_fromPrediction = dataframe2DMatrix(data[colsInput])
+    dtest = dataframe2DMatrix(data[colsInput])
     #
     regressor_model = xgb.Booster()
     regressor_model.load_model(path_to_model)
-    predictions = regressor_model.predict(dtest_fromPrediction)
+    predictions = regressor_model.predict(dtest)
     # MSE
     mse = mean_absolute_error(data[item_to_predict], pd.DataFrame(predictions, columns=[item_to_predict]))
     print(f'MSE = {mse}')
@@ -506,9 +562,9 @@ def TestRegressor(path_to_model, path_to_data, datakey, colsInput=['A_0', 'k3'],
     pred_df.to_csv(f'{output_path}/{item_to_predict}_predicted.csv', index=False)
     #
     # Comparison between true values and predictions
-    plt.figure()
-    plt.hist(pred_df[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} prediction')
-    plt.hist(data[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} true')
+    plt.figure(figsize=(12, 12))
+    plt.hist(pred_df[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} prediction', linewidth=3)
+    plt.hist(data[item_to_predict], histtype='step', bins=100, label=f'{item_to_predict} true', linewidth=3)
     plt.xlabel(item_to_predict)
     plt.ylabel('#')
     plt.legend()
@@ -532,42 +588,43 @@ def main():
             'figure.titlesize': 20
         })
     
-    root_path = 'data/labelledData'
+    root_path = 'data/labelledData/labelledData'
     # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT/synthetic'
     try:
         os.mkdir(output_path)
     except:
         pass
+    list_files = [f for f in os.listdir(root_path) if ('.csv' in f) and ('kde' not in f)]
     # xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('30413' in f)],
     #                    output_path=output_path)
-    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('kde' not in f)],
+    xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=list_files,
                        output_path=output_path)
     #
     cols_output_classifier = ['class_c1', 'class_c2', 'class_c3', 'class_c4']
-    # cols_output_classifier = ['class_c2', 'class_c3']
+    # cols_output_classifier = ['class_c1', 'class_c3', 'class_c4']
     
     cols_input = ['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
     # # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
     cols_output = cols_output_classifier + ['integral_R', 'max_deviation']
     cols_output_regressor = ['integral_R', 'max_deviation']
-    xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
-                         cols_output_regressor=cols_output_regressor)
+    # xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
+    #                      cols_output_regressor=cols_output_regressor)
+    # # #
+    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
     # #
-    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    #
-    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
-    classifier_model = xgb_obj.ClassifierModel(saveModel=True)
-    xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
-    xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
+    # classifier_model = xgb_obj.ClassifierModel(saveModel=True)
+    # xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
+    # xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
     ##
     ## TESTING AFTER THE MODELS ARE TRAINED
-    TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
-    TestRegressor(path_to_model='OUTPUT/synthetic/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='max_deviation')
-    TestClassifier(path_to_model='OUTPUT/synthetic/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
-                   output_path='OUTPUT/synthetic')
+    TestRegressor(path_to_model='OUTPUT/synthetic/samples_apr12_2025/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData', item_to_predict='integral_R')
+    TestRegressor(path_to_model='OUTPUT/synthetic/samples_apr12_2025/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData', item_to_predict='max_deviation')
+    TestClassifier(path_to_model='OUTPUT/synthetic/samples_apr12_2025/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/samples_apr12_2025/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
+                   output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData')
 if __name__=='__main__':
     main()
