@@ -80,7 +80,8 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     """
     if (original_df is None) or (cols_input is None) or (cols_output is None) or (cols_output_regressor is None) or (cols_output_classifier is None):
         return None
-    
+    # print(original_df)
+    # sys.exit()
     X = original_df[cols_input]
     y = original_df[cols_output]
     X_temp, X_test, y_temp, y_test = train_test_split(
@@ -184,7 +185,7 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
     base_params = {
         'objective': 'reg:squarederror',
         # 'tree_method': 'gpu_hist',
-        'num_boost_round': 100,
+        'num_boost_round': 1000,
         'tree_method': 'hist',
         'device': 'cuda',
         'eval_metric': 'rmse'
@@ -216,8 +217,8 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.95,  # 5% decay
-            decay_rounds=10     # every 50 rounds
+            decay_factor=0.75,  # 5% decay
+            decay_rounds=20     # every 50 rounds
         )
 
         # Train model with current parameters
@@ -260,6 +261,7 @@ def XGBRegressor_model(best_params):
 
 #-----------------------------
 ## Implementation of the Kernel Density Estimation
+## from the math
 ## Current kernel function available: gaussian
 class KernelDensityEstimation:
     def __init__(self, data=None, kernel_func='gaussian', bw=0.1):
@@ -288,3 +290,15 @@ class KernelDensityEstimation:
         x_grid = np.linspace(np.min(self.data), np.max(self.data), N_samples)
         new_samples = self.eval_density(x=x_grid)
         return x_grid, new_samples
+
+def vectmat(vect, mat):
+    # print(mat.shape)
+    if len(vect) != mat.shape[0]:
+        print("!!!! Error in dimension")
+    new_vect = np.zeros(len(vect))
+    for i in range(len(vect)):
+        elt = 0
+        for j in range(mat.shape[0]):
+            elt += vect[j] * mat[i, j]
+        new_vect[i] = elt
+    print(new_vect)    
