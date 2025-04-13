@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-import os
+import os, sys
 from response import response, response_legacy
 import matplotlib.pyplot as plt
 from scipy import integrate, interpolate
+from scipy.stats import gaussian_kde
 
 class LabelData:
     """
@@ -12,7 +13,7 @@ class LabelData:
     and classifying Channel responses into different categories based on their
     integral values and maximum deviations from ideal responses.
     """
-    def __init__(self, root_path: str, filename: str, fixHeader=False, sep='\t'):
+    def __init__(self, root_path: str, filename=None, fixHeader=False, sep='\t', generate_new_data=False):
         """
             Initialize the LabelData object.
             
@@ -20,25 +21,31 @@ class LabelData:
                 root_path (str): Path to the directory containing the source data.
                 filename (str): Name of the data file to process.
                 fixHeader (bool): Flag to fix header issues in the source data if needed.
+            In case of generate_new_data = True, filename should be a list of the datasource filenames.
         """
         self.fixHeader = fixHeader
         self.root_path = root_path
         self.filename = filename
-        print('Current file : ', self.filename)
-        self.source_data = self.__read_sourcedata(sep=sep)
+
+        if not generate_new_data:
+            print('Current file : ', self.filename)
+            self.source_data = self.__read_sourcedata(filename=self.filename, sep=sep)
+            self.Fig_output_path = '/'.join([self.root_path, filename.split('.')[0]+'_fig'])
+            try:
+                os.mkdir(self.Fig_output_path)
+            except:
+                pass
+        else:
+            self.source_data = self.__read_all_data(sep=sep)
+            self.all_columns = [c for c in self.source_data.columns if 'class' not in c]
         self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
-        self.Fig_output_path = '/'.join([self.root_path, filename.split('.')[0]+'_fig'])
         self.data_output_path = '/'.join([self.root_path, 'labelledData'])
-        try:
-            os.mkdir(self.Fig_output_path)
-        except:
-            pass
         try:
             os.mkdir(self.data_output_path)
         except:
             pass
 
-    def __read_sourcedata(self, sep='\t'):
+    def __read_sourcedata(self, filename='', sep='\t'):
         """
             Read and preprocess the source data from a TSV file (the data we have are saved in a txt format but have tab as separation of the columns).
             Handles column name cleaning and header fixing if needed.
@@ -46,7 +53,7 @@ class LabelData:
             Returns:
                 pandas.DataFrame: Preprocessed source data
         """
-        data = pd.read_csv('/'.join([self.root_path, self.filename]), sep=sep)
+        data = pd.read_csv('/'.join([self.root_path, filename]), sep=sep)
         data.columns = data.columns.str.strip().str.replace(' ', '')
         if self.fixHeader:
             columns = data.columns
@@ -173,7 +180,7 @@ class LabelData:
         else:
             return integrals_R_selected, max_deviations
         
-    def classifyResponse(self, integrals_R, max_deviations, plotHistClasses=False, plotComparisonResponses=False):
+    def classifyResponse(self, integrals_R, max_deviations, source_data, plotHistClasses=False, plotComparisonResponses=False):
         """
             Classify responses into 4 categories based on integral values and maximum deviations.
             
@@ -192,24 +199,24 @@ class LabelData:
             Returns:
                 pandas.DataFrame: Classified data with added class labels
         """
-        self.source_data['integral_R'] = integrals_R
-        self.source_data['max_deviation'] = max_deviations
+        source_data['integral_R'] = integrals_R
+        source_data['max_deviation'] = max_deviations
         # cuts before March 22, 2025
-        # class1_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] < 0)
-        # class2_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] > 0)
-        # class3_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] < 0)
-        # class4_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] > 0)
+        # class1_mask = (source_data['integral_R'] <= 0) & (source_data['max_deviation'] < 0)
+        # class2_mask = (source_data['integral_R'] <= 0) & (source_data['max_deviation'] > 0)
+        # class3_mask = (source_data['integral_R'] > 0) & (source_data['max_deviation'] < 0)
+        # class4_mask = (source_data['integral_R'] > 0) & (source_data['max_deviation'] > 0)
 
         # FIX THE CONDITIONS DEFINING EACH CLASS
-        class1_mask = (self.source_data['integral_R'] < 0) & (self.source_data['max_deviation'] < 0) # didn't have <0 before March 22. The <=0 included a conflict with class2
-        class2_mask = (self.source_data['integral_R'] <= 0) & (self.source_data['max_deviation'] > 0) 
-        class3_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] <= 0) # didn't have <=0 before March 22
-        class4_mask = (self.source_data['integral_R'] > 0) & (self.source_data['max_deviation'] > 0)
+        class1_mask = (source_data['integral_R'] < 0) & (source_data['max_deviation'] < 0) # didn't have <0 before March 22. The <=0 included a conflict with class2
+        class2_mask = (source_data['integral_R'] <= 0) & (source_data['max_deviation'] > 0) 
+        class3_mask = (source_data['integral_R'] > 0) & (source_data['max_deviation'] <= 0) # didn't have <=0 before March 22
+        class4_mask = (source_data['integral_R'] > 0) & (source_data['max_deviation'] > 0)
     
-        class1_df = self.source_data[class1_mask].copy().reset_index().drop('index', axis=1)
-        class2_df = self.source_data[class2_mask].copy().reset_index().drop('index', axis=1)
-        class3_df = self.source_data[class3_mask].copy().reset_index().drop('index', axis=1)
-        class4_df = self.source_data[class4_mask].copy().reset_index().drop('index', axis=1)
+        class1_df = source_data[class1_mask].copy().reset_index().drop('index', axis=1)
+        class2_df = source_data[class2_mask].copy().reset_index().drop('index', axis=1)
+        class3_df = source_data[class3_mask].copy().reset_index().drop('index', axis=1)
+        class4_df = source_data[class4_mask].copy().reset_index().drop('index', axis=1)
         class1_df['class'] = ['c1' for _ in range(len(class1_df))]
         class2_df['class'] = ['c2' for _ in range(len(class2_df))]
         class3_df['class'] = ['c3' for _ in range(len(class3_df))]
@@ -352,22 +359,125 @@ class LabelData:
         """
         integrals_R_selected, max_deviations = self.calculate_Integral_MaxDev(tmpdata=self.source_data, returnIdeal=False,
                                                                               plotHist=False)
-        labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, plotHistClasses=False,
+        labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=self.source_data, plotHistClasses=False,
                                              plotComparisonResponses=False)
         outputfilename = self.filename.split('.')[0] + '_labelled_tails.csv'
         labelledData.to_csv('/'.join([self.data_output_path, outputfilename]))
+
+    def __read_all_data(self, sep='\t'):
+        data = pd.DataFrame()
+        for i, f in enumerate(self.filename): # self.filename here should be a list but I don't want to change the name of the variable because the class also deal with single file
+            tmpdata = self.__read_sourcedata(filename=f, sep=sep)
+            if i==0:
+                data = tmpdata.copy()
+            else:
+                data = pd.concat([data, tmpdata], axis=0)
+
+        return data
+            
+    def GenerateNewSamples(self, N_samples=1000, target_class='c2'):
+        output_filename = 'generated_new_samples'
+        # class c2 and c3 were chosen because they don't have many sample points.
+        # The parameters we can generate from these two classes are not 100% sure to be class c2 or c3. They can always generate c1 and c4.
+        # If c1 and c4 are not enough, we can generate more of them later.
+        if target_class=='c2':
+            data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
+        elif isinstance(target_class, list):
+            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2')].to_numpy()
+        data_T = data.T
+        kde = gaussian_kde(data_T, bw_method='scott')
+        ## make sure that the number of generated samples for each class is equal
+        c1_df = pd.DataFrame()
+        c2_df = pd.DataFrame()
+        c3_df = pd.DataFrame()
+        c4_df = pd.DataFrame()
+        Total_Number_c1 = 0
+        Total_Number_c2 = 0
+        Total_Number_c3 = 0
+        Total_Number_c4 = 0
+        # while (Total_Number_c1 < N_samples) or (Total_Number_c2 < N_samples) or (Total_Number_c3 < N_samples) or (Total_Number_c4 < N_samples):
+        # while (Total_Number_c1 < N_samples) or (Total_Number_c4 < N_samples):
+        while Total_Number_c2 < N_samples:
+            new_samples = kde.resample(1)
+            new_samples = new_samples.T
+            new_df = pd.DataFrame(new_samples, columns=self.all_columns)
+            integrals_R_selected, max_deviations = self.calculate_Integral_MaxDev(tmpdata=new_df, returnIdeal=False,
+                                                                                plotHist=False)
+            # print(integrals_R_selected, max_deviations)
+            # sys.exit()
+            # sys.exit()
+            if (np.abs(integrals_R_selected[0]) > 10000) or (np.abs(max_deviations[0]) > 1000):
+                continue
+            labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
+                                                 plotHistClasses=False, plotComparisonResponses=False)
+            
+            if target_class=='c2':
+                # class c2
+                if (Total_Number_c2<N_samples) and (labelledData['class'].iloc[0] == 'c2'):
+                    if Total_Number_c2 == 0:
+                        c2_df = labelledData
+                        Total_Number_c2 += 1
+                    else:
+                        c2_df = pd.concat([c2_df, labelledData], axis=0)
+                        Total_Number_c2 += 1
+            else:
+                Total_Number_c2 = N_samples+2
+                # class c1
+                if (Total_Number_c1<N_samples) and (labelledData['class'].iloc[0] == 'c1'):
+                    if Total_Number_c1 == 0:
+                        c1_df = labelledData
+                        Total_Number_c1 += 1
+                    else:
+                        c1_df = pd.concat([c1_df, labelledData], axis=0)
+                        Total_Number_c1 += 1
+                # class c3
+                if (Total_Number_c3<N_samples) and (labelledData['class'].iloc[0] == 'c3'):
+                    if Total_Number_c3 == 0:
+                        c3_df = labelledData
+                        Total_Number_c3 += 1
+                    else:
+                        c3_df = pd.concat([c3_df, labelledData], axis=0)
+                        Total_Number_c3 += 1
+                # class c4
+                if (Total_Number_c4<N_samples) and (labelledData['class'].iloc[0] == 'c4'):
+                    if Total_Number_c4 == 0:
+                        c4_df = labelledData
+                        Total_Number_c4 += 1
+                    else:
+                        c4_df = pd.concat([c4_df, labelledData], axis=0)
+                        Total_Number_c4 += 1
+
+            # if Total_Number_c1 == N_samples:
+            #     outputfilename = output_filename + '_c1_labelled_tails.csv'
+            #     c1_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+            if Total_Number_c2 == N_samples:
+                outputfilename = output_filename + '_c2_labelled_tails.csv'
+                c2_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+            # if Total_Number_c3 == N_samples:
+            #     outputfilename = output_filename + '_c3_labelled_tails.csv'
+            #     c3_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+            # if Total_Number_c4 == N_samples:
+            #     outputfilename = output_filename + '_c4_labelled_tails.csv'
+            #     c4_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+        
+        # generated_samples_df = pd.concat([c1_df, c2_df, c3_df, c4_df], axis=0)
+        # outputfilename = self.filename.split('.')[0] + '_labelled_tails.csv'
+        # generated_samples_df.to_csv('/'.join([self.data_output_path, outputfilename]))
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
     # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
     # labeldata_obj.runLabelling()
-    # list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results')]
-    list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
+    # list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results') if '.txt' in f]
+    # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
     # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
-    for f in list_file_source:
-        labeldata_obj = LabelData(root_path='data/kde_syntheticdata', filename=f, fixHeader=False, sep=',')
-        labeldata_obj.runLabelling()
+    # for f in list_file_source:
+    #     labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
+    #     labeldata_obj.runLabelling()
     ##
-    ## RANDOMLY GENERATE THE FIT PARAMETERS
-    # rndm_fitparams_obj = RandomFitParameters(path_to_data_model='data/labelledData_after_March22_2025', dataFile_name='fit_results_run_30413_no_avg_labelled_tails.csv', output_path='OUTPUT')
-    # rndm_fitparams_obj.runAna(plotDist=False)
+    ## GENERATE NEW DATASET
+    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
+    labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
+    # labeldata_obj.GenerateNewSamples(N_samples=1000, target_class=['c1', 'c3', 'c4'])
+    # labeldata_obj.GenerateNewSamples(N_samples=20000, target_class=['c3'])
+    labeldata_obj.GenerateNewSamples(N_samples=20000, target_class='c2')
