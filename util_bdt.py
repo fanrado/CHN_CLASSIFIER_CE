@@ -1,4 +1,5 @@
 import os, sys
+import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -264,41 +265,73 @@ def XGBRegressor_model(best_params):
 ## from the math
 ## Current kernel function available: gaussian
 class KernelDensityEstimation:
-    def __init__(self, data=None, kernel_func='gaussian', bw=0.1):
+    '''
+        Implementation of the Kernel Density Estimation using pytorch for 1d and 2d cases.
+        The chosen kernel here is a gaussian.
+        inputs:
+            data: a 1d or 2d tensor of the original data,
+            kernel_func: kernel function to be used. Available function : gaussian,
+            bw: bandwidth of the kernel. bw is a scalar that control the smoothness of the probability density in case of 1d sampling.
+                For 2d sampling, bw is the covariance matrix of the original data in order to capture the correlation between the variables.
+    '''
+    def __init__(self, data=None, kernel_func='gaussian', bw=0.1, dim=1):
         self.kernel_func = kernel_func
         self.data = data
-        self.bandwidth = bw
+        self.dim = dim
+        print(self.dim)
+        if self.dim==2:
+            data_centered = self.data - self.data.mean(dim=1, keepdim=True)
+            # cov_matrix = data_centered @ data_centered.T / (self.data.shape[1] - 1)
+            cov_matrix = torch.tensor(np.cov(np.array(self.data)), dtype=torch.float32)
+            self.bandwidth = cov_matrix * (self.data.shape[1]**(-1/(self.dim+4)))  # Scott's rule
+            # self.bandwidth = torch.tensor(np.cov(np.array(self.data)), dtype=torch.float32)
+        else:
+            self.bandwidth = bw
 
     def __kernel_func(self, x, xi, bw):
         if self.kernel_func=='gaussian':
-            c1 = 1/(bw*np.sqrt(2*np.pi))
-            c2 = np.exp(-0.5*np.power((x-xi)/(bw), 2))
-            return c1*c2 
-    
+            if self.dim==1:
+                c1 = 1/(bw*np.sqrt(2*np.pi))
+                c2 = np.exp(-0.5*np.power((x-xi)/(bw), 2))
+                return c1*c2 
+            elif self.dim==2:
+                X = x - xi
+                c1 = 1 / (torch.det(bw)*torch.sqrt(torch.tensor(2, dtype=torch.float32)*torch.pi))
+                arg = X @ torch.inverse(bw) @ X
+                c2 = torch.exp(-torch.tensor(0.5, dtype=torch.float32)*arg).item()
+                return c1*c2
+            
     def eval_density(self, x):
         out = 0
-        N = len(self.data)
-        for i in range(N):
-            out += self.__kernel_func(x=x, xi=self.data[i], bw=self.bandwidth)
-        out = out / N
-        return out
-    
+        if self.dim==1:
+            N = len(self.data)
+            for i in range(N):
+                out += self.__kernel_func(x=x, xi=self.data[i].item(), bw=self.bandwidth)
+            out = out / N
+            return out
+        elif self.dim==2:
+            N = self.data.shape[1]
+            out = torch.sum(torch.tensor([self.__kernel_func(x=x, xi=self.data[:, i], bw=self.bandwidth) for i in range(N)]))
+            out = out / N
+            return out.item()
+            
+
     def resample(self, N_samples=None):
         if N_samples is None:
             print("Invalid Number of samples.")
             return None
-        x_grid = np.linspace(np.min(self.data), np.max(self.data), N_samples)
-        new_samples = self.eval_density(x=x_grid)
-        return x_grid, new_samples
+        if self.dim==1:
+            x_grid = np.linspace(torch.min(self.data).item(), torch.max(self.data).item(), N_samples)
+            probabilities = self.eval_density(x=x_grid)
+            indices = torch.multinomial(torch.tensor(probabilities, dtype=torch.float32), N_samples, replacement=True)
+            new_samples = x_grid[indices]
+            return x_grid, probabilities, new_samples
+        elif self.dim==2:
+            x_grid = torch.tensor(np.random.uniform(torch.min(self.data[0]).item(), torch.max(self.data[0]).item(), N_samples), dtype=torch.float32)
+            y_grid = torch.tensor(np.random.uniform(torch.min(self.data[1]).item(), torch.max(self.data[1]).item(), N_samples), dtype=torch.float32)
+            xy_grid = torch.stack([x_grid, y_grid], dim=-1)
 
-def vectmat(vect, mat):
-    # print(mat.shape)
-    if len(vect) != mat.shape[0]:
-        print("!!!! Error in dimension")
-    new_vect = np.zeros(len(vect))
-    for i in range(len(vect)):
-        elt = 0
-        for j in range(mat.shape[0]):
-            elt += vect[j] * mat[i, j]
-        new_vect[i] = elt
-    print(new_vect)    
+            probabilities = [self.eval_density(x=xy) for xy in xy_grid]
+            indices = torch.multinomial(torch.tensor(probabilities, dtype=torch.float32), N_samples, replacement=True)
+            selected_samples = xy_grid[indices].T
+            return xy_grid, probabilities, selected_samples
