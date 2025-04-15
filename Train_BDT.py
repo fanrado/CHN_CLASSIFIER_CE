@@ -107,7 +107,7 @@ class TrainBDT:
         print(f'testing class_c4 : {len(self.splitted_data['classifier']['y_test'][self.splitted_data['classifier']['y_test']['class_c4']==1.0])}')
         input('Press enter to continue....')
 
-    def __regressor_GridSearch(self, splitted_data_regressor: dict, item_to_predict: str):
+    def __regressor_GridSearch(self, splitted_data_regressor: dict, item_to_predict: str, regressor=True):
         """
             Perform grid search to find optimal hyperparameters for the regressor model.
             
@@ -125,16 +125,16 @@ class TrainBDT:
             # 'min_child_weight' : [3, 5, 7],
             # 'subsample' : [1.0],
             # 'colsample_bytree' : [0.8],
-            'max_depth': [30],
-            'learning_rate': [0.4],
-            # 'n_estimators': [100],
-            'min_child_weight' : [30, 40],
+            'max_depth': [15, 20],
+            'learning_rate': [0.4, 0.3],
+            # 'n_estimators': [50, 100, 150],
+            'min_child_weight' : [10, 15],
             'subsample': [1.0],
-            'colsample_bytree': [0.8]
+            'colsample_bytree': [1.0, 0.8]
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
-                                                     item_to_predict=item_to_predict)
-        print(f'Best parameters for the regressor model : {best_params_regressor}')
+                                                     item_to_predict=item_to_predict, regressor=regressor)
+        print(f'Best parameters for the model : {best_params_regressor}')
         return best_params_regressor
     
     def RegressorModel(self, item_to_predict='max_deviation', saveModel=False):
@@ -234,32 +234,33 @@ class TrainBDT:
         #     'eval_metric': ['logloss', 'error'],
         #     'tree_method' : 'gpu_hist'
         # }
-        params = {
-            'learning_rate': 0.4, 'max_depth': 30,
-            'min_child_weight': 30,
-            'objective': 'binary:logistic',
-            'eval_metric': 'logloss',
-            'tree_method' : 'hist',
-            'device': 'cuda',
-        }
+        # params = {
+        #     'learning_rate': 0.4, 'max_depth': 30,
+        #     'min_child_weight': 30,
+        #     'objective': 'binary:logistic',
+        #     'eval_metric': 'logloss',
+        #     'tree_method' : 'hist',
+        #     'device': 'cuda',
+        # }
+        best_params_classifier = self.__regressor_GridSearch(splitted_data_regressor=classifier_data, item_to_predict='', regressor=False)
         #
         # Specify evaluation sets
         evals = [(dtrain, 'train'), (dval, 'validation')]
 
         # initial learning rate
-        initial_lr = params.get('learning_rate', 0.3)
+        initial_lr = best_params_classifier.get('learning_rate', 0.3)
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.6,  # 5% decay
+            decay_factor=0.75,  # 5% decay
             decay_rounds=20     # every 50 rounds
         )
 
         # Train model
         model_classifier = xgb.train(
-            params=params,
+            params=best_params_classifier,
             dtrain=dtrain,
-            num_boost_round=1000,
+            # num_boost_round=1000,
             evals=evals,
             callbacks=[lr_callback],
             early_stopping_rounds=100,
@@ -608,23 +609,23 @@ def main():
     # # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
     cols_output = cols_output_classifier + ['integral_R', 'max_deviation']
     cols_output_regressor = ['integral_R', 'max_deviation']
-    # xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
-    #                      cols_output_regressor=cols_output_regressor)
-    # # #
-    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
+                         cols_output_regressor=cols_output_regressor)
     # #
-    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
+    #
+    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
-    # classifier_model = xgb_obj.ClassifierModel(saveModel=True)
-    # xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
-    # xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
+    classifier_model = xgb_obj.ClassifierModel(saveModel=True)
+    xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
+    xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
     ##
     ## TESTING AFTER THE MODELS ARE TRAINED
-    TestRegressor(path_to_model='OUTPUT/synthetic/samples_apr12_2025/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData', item_to_predict='integral_R')
-    TestRegressor(path_to_model='OUTPUT/synthetic/samples_apr12_2025/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData', item_to_predict='max_deviation')
-    TestClassifier(path_to_model='OUTPUT/synthetic/samples_apr12_2025/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/samples_apr12_2025/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
-                   output_path='OUTPUT/synthetic/samples_apr12_2025/TestOnData')
+    TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
+    TestRegressor(path_to_model='OUTPUT/synthetic/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='max_deviation')
+    TestClassifier(path_to_model='OUTPUT/synthetic/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
+                   output_path='OUTPUT/synthetic/TestOnData')
 if __name__=='__main__':
     main()
