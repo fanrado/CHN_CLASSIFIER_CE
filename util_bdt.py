@@ -151,7 +151,7 @@ class LearningRateDecay(TrainingCallback):
             model.set_param('learning_rate', new_lr)
         return False
 
-def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str):
+def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str, regressor=True):
     """
     Performs grid search to find optimal hyperparameters for XGBoost using native API.
     
@@ -179,17 +179,28 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         Dictionary containing the best parameters found during grid search
     """
     # Convert to DMatrix format
-    dtrain = dataframe2DMatrix(X=train_data_dict['X_train'], y=train_data_dict['y_train'][item_to_predict])
-    dval = dataframe2DMatrix(X=train_data_dict['X_val'], y=train_data_dict['y_val'][item_to_predict])
-    
+    dtrain = None
+    dval = None
+    if regressor:
+        dtrain = dataframe2DMatrix(X=train_data_dict['X_train'], y=train_data_dict['y_train'][item_to_predict])
+        dval = dataframe2DMatrix(X=train_data_dict['X_val'], y=train_data_dict['y_val'][item_to_predict])
+    else:
+        dtrain = dataframe2DMatrix(train_data_dict['X_train'], y=train_data_dict['y_train'])
+        dval = dataframe2DMatrix(train_data_dict['X_val'], y=train_data_dict['y_val'])
+
+    objective = 'reg:squarederror'
+    eval_metric = 'rmse'
+    if not regressor:
+        objective = 'binary:logistic'
+        eval_metric = 'logloss'
     # Base parameters that won't be tuned
     base_params = {
-        'objective': 'reg:squarederror',
+        'objective': objective,
         # 'tree_method': 'gpu_hist',
         'num_boost_round': 1000,
         'tree_method': 'hist',
         'device': 'cuda',
-        'eval_metric': 'rmse'
+        'eval_metric': eval_metric
     }
     
     # Initialize tracking of best model
@@ -236,16 +247,28 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
         )
         
         # Get best validation score
-        final_score = min(evals_result['eval']['rmse'])
-        print(f"Validation RMSE: {final_score:.4f}")
-        
-        # Update best parameters if better score found
-        if final_score < best_score:
-            best_score = final_score
-            best_params = current_params
-            best_num_round = model.best_iteration
-            print("New best score!")
-    
+        final_score = None
+        if regressor:
+            final_score = min(evals_result['eval']['rmse'])
+            print(f"Validation RMSE: {final_score:.4f}")
+            
+            # Update best parameters if better score found
+            if final_score < best_score:
+                best_score = final_score
+                best_params = current_params
+                best_num_round = model.best_iteration
+                print("New best score!")
+        else:
+            final_score = min(evals_result['eval']['logloss'])
+            print(f"Validation logloss: {final_score:.4f}")
+            
+            # Update best parameters if better score found
+            if final_score < best_score:
+                best_score = final_score
+                best_params = current_params
+                best_num_round = model.best_iteration
+                print("New best score!")
+
     best_params['num_boost_round'] = best_num_round
     print("\nBest parameters found:")
     print(f"Parameters: {best_params}")
