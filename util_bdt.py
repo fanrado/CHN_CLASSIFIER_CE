@@ -197,7 +197,7 @@ def gridSearch_Regressor(train_data_dict, param_grid: dict, item_to_predict: str
     base_params = {
         'objective': objective,
         # 'tree_method': 'gpu_hist',
-        'num_boost_round': 1000,
+        'num_boost_round': 200,
         'tree_method': 'hist',
         'device': 'cuda',
         'eval_metric': eval_metric
