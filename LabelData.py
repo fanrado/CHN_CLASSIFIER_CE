@@ -383,86 +383,37 @@ class LabelData:
         if target_class=='c2':
             data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
         elif isinstance(target_class, list):
-            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2')].to_numpy()
+            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
+            target_class = target_class[0]
         data_T = data.T
         kde = gaussian_kde(data_T, bw_method='scott')
-        ## make sure that the number of generated samples for each class is equal
-        c1_df = pd.DataFrame()
-        c2_df = pd.DataFrame()
-        c3_df = pd.DataFrame()
-        c4_df = pd.DataFrame()
-        Total_Number_c1 = 0
-        Total_Number_c2 = 0
-        Total_Number_c3 = 0
-        Total_Number_c4 = 0
-        # while (Total_Number_c1 < N_samples) or (Total_Number_c2 < N_samples) or (Total_Number_c3 < N_samples) or (Total_Number_c4 < N_samples):
-        # while (Total_Number_c1 < N_samples) or (Total_Number_c4 < N_samples):
-        while Total_Number_c2 < N_samples:
+
+        c_df = pd.DataFrame()
+        Total_Number_c = 0
+
+        while Total_Number_c < N_samples:
             new_samples = kde.resample(1)
             new_samples = new_samples.T
             new_df = pd.DataFrame(new_samples, columns=self.all_columns)
             integrals_R_selected, max_deviations = self.calculate_Integral_MaxDev(tmpdata=new_df, returnIdeal=False,
                                                                                 plotHist=False)
-            # print(integrals_R_selected, max_deviations)
-            # sys.exit()
-            # sys.exit()
+            
             if (np.abs(integrals_R_selected[0]) > 10000) or (np.abs(max_deviations[0]) > 1000):
                 continue
             labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
                                                  plotHistClasses=False, plotComparisonResponses=False)
             
-            if target_class=='c2':
-                # class c2
-                if (Total_Number_c2<N_samples) and (labelledData['class'].iloc[0] == 'c2'):
-                    if Total_Number_c2 == 0:
-                        c2_df = labelledData
-                        Total_Number_c2 += 1
-                    else:
-                        c2_df = pd.concat([c2_df, labelledData], axis=0)
-                        Total_Number_c2 += 1
-            else:
-                Total_Number_c2 = N_samples+2
-                # class c1
-                if (Total_Number_c1<N_samples) and (labelledData['class'].iloc[0] == 'c1'):
-                    if Total_Number_c1 == 0:
-                        c1_df = labelledData
-                        Total_Number_c1 += 1
-                    else:
-                        c1_df = pd.concat([c1_df, labelledData], axis=0)
-                        Total_Number_c1 += 1
-                # class c3
-                if (Total_Number_c3<N_samples) and (labelledData['class'].iloc[0] == 'c3'):
-                    if Total_Number_c3 == 0:
-                        c3_df = labelledData
-                        Total_Number_c3 += 1
-                    else:
-                        c3_df = pd.concat([c3_df, labelledData], axis=0)
-                        Total_Number_c3 += 1
-                # class c4
-                if (Total_Number_c4<N_samples) and (labelledData['class'].iloc[0] == 'c4'):
-                    if Total_Number_c4 == 0:
-                        c4_df = labelledData
-                        Total_Number_c4 += 1
-                    else:
-                        c4_df = pd.concat([c4_df, labelledData], axis=0)
-                        Total_Number_c4 += 1
+            if (Total_Number_c < N_samples) and (labelledData['class'].iloc[0]==target_class):
+                if Total_Number_c==0:
+                    c_df = labelledData
+                    Total_Number_c += 1
+                else:
+                    c_df = pd.concat([c_df, labelledData], axis=0)
+                    Total_Number_c += 1
+            if Total_Number_c == N_samples:
+                outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
+                c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
 
-            # if Total_Number_c1 == N_samples:
-            #     outputfilename = output_filename + '_c1_labelled_tails.csv'
-            #     c1_df.to_csv('/'.join([self.data_output_path, outputfilename]))
-            if Total_Number_c2 == N_samples:
-                outputfilename = output_filename + '_c2_labelled_tails.csv'
-                c2_df.to_csv('/'.join([self.data_output_path, outputfilename]))
-            # if Total_Number_c3 == N_samples:
-            #     outputfilename = output_filename + '_c3_labelled_tails.csv'
-            #     c3_df.to_csv('/'.join([self.data_output_path, outputfilename]))
-            # if Total_Number_c4 == N_samples:
-            #     outputfilename = output_filename + '_c4_labelled_tails.csv'
-            #     c4_df.to_csv('/'.join([self.data_output_path, outputfilename]))
-        
-        # generated_samples_df = pd.concat([c1_df, c2_df, c3_df, c4_df], axis=0)
-        # outputfilename = self.filename.split('.')[0] + '_labelled_tails.csv'
-        # generated_samples_df.to_csv('/'.join([self.data_output_path, outputfilename]))
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
@@ -479,5 +430,7 @@ if __name__ == '__main__':
     list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
     labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     # labeldata_obj.GenerateNewSamples(N_samples=1000, target_class=['c1', 'c3', 'c4'])
-    # labeldata_obj.GenerateNewSamples(N_samples=20000, target_class=['c3'])
-    labeldata_obj.GenerateNewSamples(N_samples=20000, target_class='c2')
+    labeldata_obj.GenerateNewSamples(N_samples=200000, target_class=['c1'])
+    labeldata_obj.GenerateNewSamples(N_samples=200000, target_class=['c4'])
+    # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class=['c3'])
+    # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
