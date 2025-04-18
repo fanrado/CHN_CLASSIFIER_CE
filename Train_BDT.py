@@ -42,34 +42,6 @@ class TrainBDT:
                 if columns[0] != '#Ch.#':
                     tmpdata.drop(columns=columns[0], inplace=True)
                 data = pd.concat([data, tmpdata], axis=0)
-        # print(data.max())
-        integral = data['integral_R']
-        
-        # median = integral.median()
-        # print(integral.median())
-        # print(data[np.abs(data['integral_R']) < integral.mean()/1e45].describe())
-        # plt.figure()
-        # plt.hist(data['integral_R'][np.abs(data['integral_R']) < integral.mean()/1e39], bins=100, histtype='step')
-        # # plt.xscale('log')
-        # # plt.yscale('log')
-        # plt.show()
-        # sys.exit()
-        # data = data[np.abs(data['integral_R']) < integral.mean()/1e39] # drop large numbers > 1e39
-        # max_dev = data['max_deviation']
-        # plt.figure()
-        # plt.hist(data['max_deviation'][np.abs(data['max_deviation']) < max_dev.mean()+5*max_dev.std()], bins=100, histtype='step')
-        # plt.show()
-        # sys.exit()
-        # data = data[np.abs(data['max_deviation']) < max_dev.mean()+5*max_dev.std()]
-        # plt.figure()
-        # plt.hist(data['integral_R'], bins=100, histtype='step')
-        # plt.title('integral_R')
-        # plt.show()
-        # #
-        # plt.hist(data['max_deviation'], bins=100, histtype='step')
-        # plt.title('max_deviation')
-        # plt.show()
-        # sys.exit()
         return one_hot_encode_sklearn(data=data, column_name='class')
         # return data
     
@@ -125,12 +97,12 @@ class TrainBDT:
             # 'min_child_weight' : [3, 5, 7],
             # 'subsample' : [1.0],
             # 'colsample_bytree' : [0.8],
-            'max_depth': [15, 20],
-            'learning_rate': [0.4, 0.3],
+            'max_depth': [15],#, 20],
+            'learning_rate': [0.4],#, 0.3],
             # 'n_estimators': [50, 100, 150],
-            'min_child_weight' : [10, 15],
+            'min_child_weight' : [15],#, 20],
             'subsample': [1.0],
-            'colsample_bytree': [1.0, 0.8]
+            'colsample_bytree': [1.0]
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
                                                      item_to_predict=item_to_predict, regressor=regressor)
@@ -228,20 +200,6 @@ class TrainBDT:
         dtrain = dataframe2DMatrix(classifier_data['X_train'], y=classifier_data['y_train'])
         dval = dataframe2DMatrix(classifier_data['X_val'], y=classifier_data['y_val'])
         # Set parameters
-        # params = {
-        #     'learning_rate': 0.1, 'max_depth': 3,
-        #     'objective': 'binary:logistic',
-        #     'eval_metric': ['logloss', 'error'],
-        #     'tree_method' : 'gpu_hist'
-        # }
-        # params = {
-        #     'learning_rate': 0.4, 'max_depth': 30,
-        #     'min_child_weight': 30,
-        #     'objective': 'binary:logistic',
-        #     'eval_metric': 'logloss',
-        #     'tree_method' : 'hist',
-        #     'device': 'cuda',
-        # }
         best_params_classifier = self.__regressor_GridSearch(splitted_data_regressor=classifier_data, item_to_predict='', regressor=False)
         #
         # Specify evaluation sets
@@ -252,8 +210,8 @@ class TrainBDT:
         # Create proper callback instance
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
-            decay_factor=0.75,  # 5% decay
-            decay_rounds=20     # every 50 rounds
+            decay_factor=0.75,  
+            decay_rounds=100    
         )
 
         # Train model
