@@ -3,12 +3,13 @@ import numpy as np
 import os, sys
 from response import response, response_legacy
 # torch response
-import torch
+import torch, time
 from response import response_torch, response_legacy_torch
 
 import matplotlib.pyplot as plt
 from scipy import integrate, interpolate
 from scipy.stats import gaussian_kde
+
 
 class LabelData:
     """
@@ -186,38 +187,38 @@ class LabelData:
         else:
             return integrals_R_selected, max_deviations
     
-    def calculate_Integral_MaxDev_gpu(self, x: torch.Tensor, par0: torch.Tensor):
-        # real and ideal response
-        R       = response_torch(x=x, par=par0)
-        R_ideal = response_legacy_torch(x=x, par=par0)
+    # def calculate_Integral_MaxDev_gpu(self, x: torch.Tensor, par0: torch.Tensor):
+    #     # real and ideal response
+    #     R       = response_torch(x=x, par=par0)
+    #     R_ideal = response_legacy_torch(x=x, par=par0)
 
-        pos_peak = torch.argmax(R_ideal)
-        x_tail   = x[pos_peak+6:]
-        R_tail   = R[pos_peak+6:]
-        I_tail   = R_ideal[pos_peak+6:] # tail of the ideal response
+    #     pos_peak = torch.argmax(R_ideal)
+    #     x_tail   = x[pos_peak+6:]
+    #     R_tail   = R[pos_peak+6:]
+    #     I_tail   = R_ideal[pos_peak+6:] # tail of the ideal response
 
-        # fixing the integration window to pospeak+50
-        cutoff   = x_tail[50]
-        mask     = x_tail <= cutoff
+    #     # fixing the integration window to pospeak+50
+    #     cutoff   = x_tail[50]
+    #     mask     = x_tail <= cutoff
 
-        x_sel    = x_tail[mask]
-        R_sel    = R_tail[mask]
-        I_sel    = I_tail[mask]
+    #     x_sel    = x_tail[mask]
+    #     R_sel    = R_tail[mask]
+    #     I_sel    = I_tail[mask]
 
-        # integrate
-        int_R    = torch.trapz(R_sel, x_sel)
+    #     # integrate
+    #     int_R    = torch.trapz(R_sel, x_sel)
 
-        # 2-point moving average
-        avg_R    = (R_sel[:-1]  + R_sel[1:]) * 0.5
-        avg_I    = (I_sel[:-1]  + I_sel[1:]) * 0.5
+    #     # 2-point moving average
+    #     avg_R    = (R_sel[:-1]  + R_sel[1:]) * 0.5
+    #     avg_I    = (I_sel[:-1]  + I_sel[1:]) * 0.5
 
-        # max deviation
-        devs     = avg_R - avg_I
-        max_p    = torch.max(devs)
-        max_n    = torch.min(devs)
-        max_dev  = max_n if torch.abs(max_n) > torch.abs(max_p) else max_p
+    #     # max deviation
+    #     devs     = avg_R - avg_I
+    #     max_p    = torch.max(devs)
+    #     max_n    = torch.min(devs)
+    #     max_dev  = max_n if torch.abs(max_n) > torch.abs(max_p) else max_p
 
-        return int_R, max_dev
+    #     return int_R, max_dev
         
     def classifyResponse(self, integrals_R, max_deviations, source_data, plotHistClasses=False, plotComparisonResponses=False):
         """
@@ -456,59 +457,146 @@ class LabelData:
                 outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
                 c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
     
-    def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2'):
-        output_filename = 'generate_new_samples'
-        # class c2 and c3 were chosen because they don't have many sample points.
-        # The parameters we can generate from these two classes are not 100% sure to be class c2 or c3. They can always generate c1 and c4.
-        # If c1 and c4 are not enough, we can generate more of them later.
+    # def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2'):
+    #     output_filename = 'generate_new_samples'
+    #     # class c2 and c3 were chosen because they don't have many sample points.
+    #     # The parameters we can generate from these two classes are not 100% sure to be class c2 or c3. They can always generate c1 and c4.
+    #     # If c1 and c4 are not enough, we can generate more of them later.
+    #     if target_class=='c2':
+    #         data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
+    #     else:
+    #         data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
+        
+    #     data_T = data.T
+    #     kde = gaussian_kde(data_T, bw_method='scott')
+
+    #     c_df = pd.DataFrame()
+    #     Total_Number_c = 0
+    #     while Total_Number_c < N_samples:
+    #         new_samples = kde.resample(1)
+    #         new_samples = new_samples.T
+    #         new_df = pd.DataFrame(new_samples, columns=self.all_columns)
+    #         #
+    #         # GPU-accelerated integral of the tail and max deviation
+    #         x = torch.linspace(
+    #             float(new_df['t'].iloc[0]),
+    #             float(new_df['t'].iloc[0]) + 70,
+    #             steps=70,
+    #             dtype=torch.float32,
+    #             device=self.device
+    #         )
+    #         par0 = torch.tensor(
+    #             new_df[self.response_params].iloc[0].values,
+    #             dtype=torch.float32,
+    #             device=self.device
+    #         )
+    #         int_R, max_dev = self.calculate_Integral_MaxDev_gpu(x=x, par0=par0)
+    #         integrals_R_selected = np.array([int_R.item()])
+    #         max_deviations       = np.array([max_dev.item()])
+            
+    #         if (np.abs(integrals_R_selected[0]) > 10000) or (np.abs(max_deviations[0]) > 1000):
+    #             continue
+    #         labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
+    #                                              plotHistClasses=False, plotComparisonResponses=False)
+            
+    #         if (Total_Number_c < N_samples) and (labelledData['class'].iloc[0]==target_class):
+    #             if Total_Number_c==0:
+    #                 c_df = labelledData
+    #                 Total_Number_c += 1
+    #             else:
+    #                 c_df = pd.concat([c_df, labelledData], axis=0)
+    #                 Total_Number_c += 1
+            
+    #         if Total_Number_c == N_samples:
+    #             outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
+    #             c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+
+    def calculate_Integral_MaxDev_gpu_batch(self, pars: torch.Tensor):
+        """
+        pars: [B,7] on self.device
+        returns (ints, max_devs) as numpy arrays of shape [B]
+        """
+        B, D = pars.shape
+        L = 70
+        # build time‐grid: [B,L]
+        t0 = pars[:,0].unsqueeze(1)   # [B,1]
+        xs = t0 + torch.arange(L, device=self.device).view(1, L)
+
+        # compute in batch
+        R      = response_torch(xs, pars)              # [B,L]
+        R_ideal= response_legacy_torch(xs, pars)       # [B,L]
+
+        # find peak
+        pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
+
+        # gather fixed‐length tail 50
+        idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
+        R_tail       = R     .gather(1, idx_base)      # [B,50]
+        R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
+
+        # integral via trapezoid
+        ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
+
+        # 2‐pt avg via conv1d
+        kern = torch.tensor([0.5,0.5], device=self.device).view(1,1,2)
+        R_avg       = torch.nn.functional.conv1d(R_tail.unsqueeze(1), kern).squeeze(1)      # [B,49]
+        R_ideal_avg = torch.nn.functional.conv1d(R_ideal_tail.unsqueeze(1), kern).squeeze(1) # [B,49]
+
+        # max deviation (signed)
+        dev = R_avg - R_ideal_avg                                          # [B,49]
+        mn, _ = dev.min(dim=1);  mx, _ = dev.max(dim=1)
+        max_dev = torch.where(mn.abs() > mx.abs(), mn, mx)                # [B]
+
+        return ints.cpu().numpy(), max_dev.cpu().numpy()
+
+
+    def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2', batch_size=256):
+        # … your setup up to kde …
         if target_class=='c2':
             data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
         else:
-            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
-        
-        data_T = data.T
-        kde = gaussian_kde(data_T, bw_method='scott')
+            data = self.source_data[self.all_columns].to_numpy()
+        kde = gaussian_kde(data.T, bw_method='scott')
 
-        c_df = pd.DataFrame()
-        Total_Number_c = 0
-        while Total_Number_c < N_samples:
-            new_samples = kde.resample(1)
-            new_samples = new_samples.T
-            new_df = pd.DataFrame(new_samples, columns=self.all_columns)
-            #
-            # GPU-accelerated integral of the tail and max deviation
-            x = torch.linspace(
-                float(new_df['t'].iloc[0]),
-                float(new_df['t'].iloc[0]) + 70,
-                steps=70,
-                dtype=torch.float32,
-                device=self.device
-            )
-            par0 = torch.tensor(
-                new_df[self.response_params].iloc[0].values,
-                dtype=torch.float32,
-                device=self.device
-            )
-            int_R, max_dev = self.calculate_Integral_MaxDev_gpu(x=x, par0=par0)
-            integrals_R_selected = np.array([int_R.item()])
-            max_deviations       = np.array([max_dev.item()])
-            
-            if (np.abs(integrals_R_selected[0]) > 10000) or (np.abs(max_deviations[0]) > 1000):
+        out_rows = []
+        while len(out_rows) < N_samples:
+            # 1) draw batch_size new params via KDE
+            new_params = kde.resample(batch_size).T                             # [B,D] CPU
+            pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
+
+            # 2) compute ints & devs in one GPU call
+            ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
+
+            # 3) filter too‐large tails
+            mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
+
+            if not mask1.any():
                 continue
-            labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
-                                                 plotHistClasses=False, plotComparisonResponses=False)
-            
-            if (Total_Number_c < N_samples) and (labelledData['class'].iloc[0]==target_class):
-                if Total_Number_c==0:
-                    c_df = labelledData
-                    Total_Number_c += 1
-                else:
-                    c_df = pd.concat([c_df, labelledData], axis=0)
-                    Total_Number_c += 1
-            
-            if Total_Number_c == N_samples:
-                outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
-                c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
+
+            # 4) classify these masked ones on CPU *without* looping in python
+            df = pd.DataFrame(new_params[mask1], columns=self.all_columns)
+            df['integral_R']     = ints[mask1]
+            df['max_deviation']  = devs[mask1]
+
+            # vectorized class assignment:
+            df['class'] = np.where(
+               (df['integral_R']<0)&(df['max_deviation']<0), 'c1',
+            np.where((df['integral_R']<=0)&(df['max_deviation']>0), 'c2',
+            np.where((df['integral_R']>0)&(df['max_deviation']<=0), 'c3','c4')))
+
+            # 5) select only target_class
+            sel = df['class']==target_class
+            if sel.any():
+                out_rows.append(df[sel])
+                # flatten list-of-frames if we overshot:
+                all_df = pd.concat(out_rows, axis=0).head(N_samples)
+        
+        # drop unnecessary column
+        cols_to_drop = [col for col in all_df.columns if 'Unnamed' in col]
+        all_df.drop(columns=cols_to_drop, inplace=True)
+        all_df['#Ch.#'] = all_df['#Ch.#'].astype('int32').abs()
+        # save final
+        all_df.to_csv(f"{self.data_output_path}/generate_new_samples_{target_class}.csv", index=False)
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
@@ -521,12 +609,56 @@ if __name__ == '__main__':
     #     labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
     #     labeldata_obj.runLabelling()
     ##
-    ## GENERATE NEW DATASET
-    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
-    labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
+    # ## GENERATE NEW DATASET
+    # list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
+    # labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     # labeldata_obj.GenerateNewSamples(N_samples=1000, target_class=['c1', 'c3', 'c4'])
     # labeldata_obj.GenerateNewSamples(N_samples=200000, target_class=['c1'])
     # labeldata_obj.GenerateNewSamples(N_samples=200000, target_class=['c4'])
     # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class=['c3'])
     # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=10000, target_class='c1')
+
+    ## GENERATE NEW DATASET using GPU
+    # related to GPU kernel time
+    start_evt   = torch.cuda.Event(enable_timing=True)
+    end_evt     = torch.cuda.Event(enable_timing=True)
+    # start is for the total time CPU + GPU
+    start = time.perf_counter()
+    torch.cuda.synchronize()    # drain any prior work
+    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
+    labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
+    print('Class c1')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c1', batch_size=32)
+    end_evt.record()
+    
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    total = time.perf_counter() - start
+    print(f'Total elpsed time : {total:.3f} s')
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # c4
+    # print('Class c4')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c4', batch_size=32)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # #
+    # # c3
+    # print('Class c3')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # # c2
+    # print('Class c2')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c2', batch_size=32)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
