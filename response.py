@@ -118,16 +118,18 @@ def response_legacy(x, par):
    #    return 0
    return value
 
+# @torch.jit.script
 def response_torch(x: torch.Tensor, par: torch.Tensor) ->torch.Tensor:
    #  t = np.array(x) - par[0]
-   t = x - par[0]
+   # t = x - par[0]
+   t = x - par[..., 0:1]
    #  t = x[0] - par[0]
    #  t = np.array(x)
    #  if t <= 0:
    #      return 0.0
     
-   A0 = par[1]
-   tp = par[2]
+   A0 = par[...,1:2]
+   tp = par[...,2:3]
    CT = 1.0 / 1.996
    A = A0 * 2.7433 / (tp * CT)**4
    p0 = 1.477 / (tp * CT)
@@ -136,10 +138,10 @@ def response_torch(x: torch.Tensor, par: torch.Tensor) ->torch.Tensor:
    pi1 = 0.598 / (tp * CT)
    pi2 = 1.299 / (tp * CT)
 
-   k3 = par[3]
-   k4 = par[4]
-   k5 = par[5]
-   k6 = par[6]
+   k3 = par[...,3:4]
+   k4 = par[...,4:5]
+   k5 = par[...,5:6]
+   k6 = par[...,6:7]
 
    # alias torch functions
    exp = torch.exp
@@ -222,12 +224,13 @@ def response_torch(x: torch.Tensor, par: torch.Tensor) ->torch.Tensor:
 
    return value
 
+# @torch.jit.script
 def response_legacy_torch(x: torch.Tensor, par: torch.Tensor) ->torch.Tensor:
 #   t = x[0]-par[0]
    # t = np.array(x) - par[0]
-   t = x - par[0]
-   A0 = par[1]
-   tp = par[2]
+   t = x - par[...,0:1]
+   A0 = par[...,1:2]
+   tp = par[...,2:3]
 
    reltime = t / tp
    gain = A0* 1.012
