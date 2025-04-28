@@ -638,27 +638,27 @@ if __name__ == '__main__':
     print(f'Total elpsed time : {total:.3f} s')
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c4
-    # print('Class c4')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c4', batch_size=32)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    # #
-    # # c3
-    # print('Class c3')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    # # c2
-    # print('Class c2')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c2', batch_size=32)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    print('Class c4')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c4', batch_size=32)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    #
+    # c3
+    print('Class c3')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # c2
+    print('Class c2')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c2', batch_size=32)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
