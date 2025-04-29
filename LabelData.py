@@ -529,24 +529,76 @@ class LabelData:
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
 
-        # gather fixed‐length tail 50
-        idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
-        R_tail       = R     .gather(1, idx_base)      # [B,50]
-        R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
+        # # gather fixed‐length tail 50
+        # idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
+        # R_tail       = R     .gather(1, idx_base)      # [B,50]
+        # R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
 
-        # integral via trapezoid
-        ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
+        # # integral via trapezoid
+        # ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
 
-        # 2‐pt avg via conv1d
-        kern = torch.tensor([0.5,0.5], device=self.device).view(1,1,2)
-        R_avg       = torch.nn.functional.conv1d(R_tail.unsqueeze(1), kern).squeeze(1)      # [B,49]
-        R_ideal_avg = torch.nn.functional.conv1d(R_ideal_tail.unsqueeze(1), kern).squeeze(1) # [B,49]
+        # # 2‐pt avg via conv1d
+        # kern = torch.tensor([0.5,0.5], device=self.device).view(1,1,2)
+        # R_avg       = torch.nn.functional.conv1d(R_tail.unsqueeze(1), kern).squeeze(1)      # [B,49]
+        # R_ideal_avg = torch.nn.functional.conv1d(R_ideal_tail.unsqueeze(1), kern).squeeze(1) # [B,49]
 
-        # max deviation (signed)
-        dev = R_avg - R_ideal_avg                                          # [B,49]
-        mn, _ = dev.min(dim=1);  mx, _ = dev.max(dim=1)
-        max_dev = torch.where(mn.abs() > mx.abs(), mn, mx)                # [B]
-
+        # # max deviation (signed)
+        # dev = R_avg - R_ideal_avg                                          # [B,49]
+        # mn, _ = dev.min(dim=1);  mx, _ = dev.max(dim=1)
+        # max_dev = torch.where(mn.abs() > mx.abs(), mn, mx)                # [B]
+        # VECTORIZED: Create tail indices directly
+        # First create ranges for each sample: [B, 50]
+        offsets = torch.arange(50, device=self.device).expand(B, 50)
+        # Add the peak positions: [B, 50]
+        indices = pos_peak.unsqueeze(1) + offsets
+        
+        # Create valid mask (indices within bounds)
+        valid_mask = indices < L
+        # Clamp indices to valid range
+        indices = torch.clamp(indices, 0, L-1)
+        
+        # Gather with safe indices
+        batch_indices = torch.arange(B, device=self.device).view(B, 1).expand(B, 50)
+        R_tail = R[batch_indices, indices]
+        R_ideal_tail = R_ideal[batch_indices, indices]
+        
+        # VECTORIZED: Integrate using trapezoidal rule with masking
+        # Get valid pairs for integration (need both points in a segment)
+        valid_segments = valid_mask[:, :-1] & valid_mask[:, 1:]
+        # Areas under each segment
+        segments = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
+        # Zero out invalid segments
+        segments = segments * valid_segments.float()
+        # Sum for each sample
+        ints = segments.sum(dim=1)
+        
+        # VECTORIZED: 2-pt moving average without conv1d
+        R_avg = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
+        R_ideal_avg = (R_ideal_tail[:, :-1] + R_ideal_tail[:, 1:]) * 0.5
+        
+        # VECTORIZED: Max deviation calculation
+        dev = R_avg - R_ideal_avg
+        
+        # Handle valid_mask for deviation
+        valid_mask_conv = valid_segments
+        
+        # Find max positive and negative deviations
+        # Apply large negative value to invalid positions for max
+        masked_dev_for_max = dev.clone()
+        masked_dev_for_max[~valid_mask_conv] = float('-inf')
+        max_dev_pos, _ = masked_dev_for_max.max(dim=1)
+        
+        # Apply large positive value to invalid positions for min
+        masked_dev_for_min = dev.clone()
+        masked_dev_for_min[~valid_mask_conv] = float('inf')
+        max_dev_neg, _ = masked_dev_for_min.min(dim=1)
+        
+        # Select the one with larger magnitude
+        max_dev = torch.where(max_dev_neg.abs() > max_dev_pos.abs(), max_dev_neg, max_dev_pos)
+        
+        # Handle case where all elements in a sample are invalid
+        all_invalid = ~valid_mask_conv.any(dim=1)
+        max_dev[all_invalid] = 0.0
         return ints.cpu().numpy(), max_dev.cpu().numpy()
 
 
@@ -558,21 +610,23 @@ class LabelData:
             data = self.source_data[self.all_columns].to_numpy()
         kde = gaussian_kde(data.T, bw_method='scott')
 
-        out_rows = []
-        while len(out_rows) < N_samples:
+        # out_rows = []
+        all_df = pd.DataFrame()
+        while len(all_df) < N_samples:
             # 1) draw batch_size new params via KDE
             new_params = kde.resample(batch_size).T                             # [B,D] CPU
             pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
 
             # 2) compute ints & devs in one GPU call
             ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
+            # del pars_t
+            torch.cuda.empty_cache() # release cached memory
 
             # 3) filter too‐large tails
             mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
 
             if not mask1.any():
                 continue
-
             # 4) classify these masked ones on CPU *without* looping in python
             df = pd.DataFrame(new_params[mask1], columns=self.all_columns)
             df['integral_R']     = ints[mask1]
@@ -587,9 +641,15 @@ class LabelData:
             # 5) select only target_class
             sel = df['class']==target_class
             if sel.any():
-                out_rows.append(df[sel])
+                if len(all_df)==0:
+                    all_df = df[sel]
+                else:
+                    all_df = pd.concat([all_df, df[sel]], axis=0)
+                # all_df.append(df[sel])
+                # print(df[sel])
+                print(len(all_df))
                 # flatten list-of-frames if we overshot:
-                all_df = pd.concat(out_rows, axis=0).head(N_samples)
+                # all_df = pd.concat(out_rows, axis=0).head(N_samples)
         
         # drop unnecessary column
         cols_to_drop = [col for col in all_df.columns if 'Unnamed' in col]
@@ -627,38 +687,38 @@ if __name__ == '__main__':
     torch.cuda.synchronize()    # drain any prior work
     list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
     labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
-    print('Class c1')
-    start_evt.record()
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c1', batch_size=32)
-    end_evt.record()
+    # print('Class c1')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c1', batch_size=4*4096)
+    # end_evt.record()
     
-    torch.cuda.synchronize()    # wait until all GPU operations are done
-    total = time.perf_counter() - start
-    print(f'Total elpsed time : {total:.3f} s')
-    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # total = time.perf_counter() - start
+    # print(f'Total elpsed time : {total:.3f} s')
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c4
     print('Class c4')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=300000, target_class='c4', batch_size=32)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=10000, target_class='c4', batch_size=10*4096)
     end_evt.record()
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     #
-    # c3
-    print('Class c3')
-    start_evt.record()
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
-    end_evt.record()
-    torch.cuda.synchronize()    # wait until all GPU operations are done
-    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    # c2
-    print('Class c2')
-    start_evt.record()
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c2', batch_size=32)
-    end_evt.record()
-    torch.cuda.synchronize()    # wait until all GPU operations are done
-    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # # c3
+    # print('Class c3')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # # c2
+    # print('Class c2')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c2', batch_size=512)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
