@@ -10,6 +10,11 @@ from response import *
 import xgboost as xgb
 from util_bdt import dataframe2DMatrix, one_hot_encode_sklearn
 
+from sklearn.metrics import confusion_matrix
+
+import seaborn as sns
+import random
+
 class Sim_waveform:
     '''
         Generate waveforms using the fit parameters and the response function.
@@ -20,7 +25,7 @@ class Sim_waveform:
         self.sim_data = pd.DataFrame()
         if self.path_to_sim is not None:
             self.sim_data = self.read_csv_sim()
-        self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.response_params = ['#Ch.#', 't', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
 
     def read_csv_sim(self):
         tmpdata = pd.read_csv(self.path_to_sim)
@@ -38,8 +43,8 @@ class Sim_waveform:
         return R
     
     def run(self):
-        # N_samples = self.sim_data.shape[0]
-        N_samples = 10000
+        N_samples = self.sim_data.shape[0]
+        # N_samples = 10000
         key_name = self.path_to_sim.split('/')[-1].split('.')[0].split('_')[3]
         for isample in range(N_samples):
             params = list(self.sim_data[self.response_params].iloc[isample])
@@ -56,15 +61,58 @@ class Load_chunk_dset:
     '''
         This class will load a chunk of the data.
     '''
-    def __init__(self, path_to_dset: str, chunk_size=5, target_columns=['']):
+    def __init__(self, path_to_dset: str, chunk_size=5, target_columns=[''], input_columns=[], Ntest=5000):
+        '''
+            - path_to_dset: path to where the .npz files are located.
+            - chunk_size: the size of the chunk you want to use.
+            - target_columns: what are your target columns ?
+            - input_columns: what input columns do you want to use ? If none is provided, the default input columns are the data points in a waveforms (70 points => 70 columns).
+            - Ntest: the number of samples per class you want to use for testing.
+        '''
         self.path_to_dset = path_to_dset
-        self.list_dset = ['/'.join([self.path_to_dset, f]) for f in os.listdir(self.path_to_dset)[:5000]]
+        # self.list_dset = ['/'.join([self.path_to_dset, f]) for f in os.listdir(self.path_to_dset)[:-Ntest]]
+        self.list_dset = ['/'.join([self.path_to_dset, f]) for f in os.listdir(self.path_to_dset)]
+        #
+        # this split is crucial because it make sure that the list_test has all classes
+        self.list_train, self.list_test = self.train_test_split(list_dset=self.list_dset, Ntest=Ntest)
+
         self.target_columns = target_columns
-        self.input_columns = [f'p{i}' for i in range(70)]
+        if len(input_columns)==0:
+            self.input_columns = [f'p{i}' for i in range(70)]
+        else:
+            self.input_columns = input_columns
+        self.input_columns.append('#Ch.#')
         self.chunk_size = chunk_size
         self.iter = 0
 
-    def npz2df(self, filepath='', forTest_regressor=False):
+    def train_test_split(self, list_dset, Ntest):
+        '''
+            Split the entire dataset into train and test sets.
+            Ntest is the number of samples in each class.
+        '''
+        c1 = [f for f in list_dset if 'c1' in f]
+        c2 = [f for f in list_dset if 'c2' in f]
+        c3 = [f for f in list_dset if 'c3' in f]
+        c4 = [f for f in list_dset if 'c4' in f]
+        # Print the length of each class list
+        print(f"Length of class c1: {len(c1)}")
+        print(f"Length of class c2: {len(c2)}")
+        print(f"Length of class c3: {len(c3)}")
+        print(f"Length of class c4: {len(c4)}")
+        train_c1, test_c1 = c1[:-Ntest], c1[-Ntest:]
+        train_c2, test_c2 = c2[:-Ntest], c2[-Ntest:]
+        train_c3, test_c3 = c3[:-Ntest], c3[-Ntest:]
+        train_c4, test_c4 = c4[:-Ntest], c4[-Ntest:]
+        train = train_c1 + train_c2 + train_c3 + train_c4
+        test = test_c1 + test_c2 + test_c3 + test_c4
+        random.shuffle(train)
+        random.shuffle(test)
+        return train, test
+    
+    def npz2df(self, filepath='', forTest_regressor=False, forTest_classifier=False):
+        '''
+            This function reads a .npz file and convert it to  dataframe with one row.
+        '''
         data = np.load(filepath)
         wf = np.array(data['wf']).reshape(-1, 1)
         wf_dict = {f'p{i}': wf[i] for i in range(len(wf))}
@@ -77,22 +125,29 @@ class Load_chunk_dset:
             # split features (input) and target values
             y = wf_df[self.target_columns]
             X = wf_df[self.input_columns]
-            # return xgb.DMatrix(X, label=None), y
-            return dataframe2DMatrix(X=X), y
+            return X, y
+        elif forTest_classifier:
+            return wf_df[self.input_columns + self.target_columns]
         else:
             return wf_df
 
     def reset(self):
+        '''
+            Reset the iteration index.
+        '''
         self.iter = 0
         return self
     
     def load(self, tasktype='regression'):
+        '''
+            This function tries to load a chunk of the dataset. If successful, it returns a dMatrix. Otherwise, it returns None.
+        '''
         try:
             chunk = pd.DataFrame()
-            if self.chunk_size*(self.iter+1) > len(self.list_dset)-1:
+            if self.chunk_size*(self.iter+1) > len(self.list_train)-1:
                 return None
             for i, ichunk in enumerate(range(self.iter*self.chunk_size, (self.iter+1)*self.chunk_size)):
-                df = self.npz2df(filepath=self.list_dset[ichunk])
+                df = self.npz2df(filepath=self.list_train[ichunk])
                 if i==0:
                     chunk = df.copy()
                 else:
@@ -102,10 +157,6 @@ class Load_chunk_dset:
             self.iter += 1
             if tasktype=='regression':
                 # split features (input) and target values
-                # y = chunk[self.target_columns].values
-                # X = chunk[self.input_columns].values
-                # return xgb.DMatrix(X, label=y)
-                #
                 # use dataframes
                 y = chunk[self.target_columns]
                 X = chunk[self.input_columns]
@@ -131,7 +182,7 @@ class PreClassifier_BDT:
                         the fit parameters ('t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6'), and the corresponding class ('class').
             output_path : path to where the output will be saved.
     '''
-    def __init__(self, path_to_data=None, output_path=None, target_columns=['']):
+    def __init__(self, path_to_data=None, output_path=None, target_columns=[''], Ntest=10):
         '''
             path_to_data : path to the list of npz data,
             output_path : path to where you want to save the output of the code.
@@ -139,7 +190,10 @@ class PreClassifier_BDT:
         self.path_to_data = path_to_data
         self.output_path = output_path
         self.target_columns = target_columns
-
+        self.chunk_size = 100
+        self.list_dset = []
+        self.list_test = []
+        self.Ntest = Ntest
 
     def tune_hyperparam_bdt(self):
         params = {
@@ -167,7 +221,11 @@ class PreClassifier_BDT:
             'colsample_bytree': 1.0
         }
 
-        data_iter = Load_chunk_dset(path_to_dset=self.path_to_data, chunk_size=200, target_columns=self.target_columns)
+        data_iter = Load_chunk_dset(path_to_dset=self.path_to_data, chunk_size=self.chunk_size, target_columns=self.target_columns, Ntest=self.Ntest)
+        self.list_dset = data_iter.list_train
+        # print(self.list_dset)
+        self.list_test = data_iter.list_test
+
         next_chunk = data_iter.load(tasktype=tasktype)
         eval_chunk = data_iter.load(tasktype=tasktype)
         # regressor_model = xgb.XGBRegressor(**params)
@@ -191,7 +249,7 @@ class PreClassifier_BDT:
             eval_chunk = data_iter.load(tasktype=tasktype)
         return bdt_model
     
-    def testRegressor(self, regressor_predFitParams=None, regressor_predIntegral=None, regressor_predMaxdev=None, Ntest=100):
+    def testRegressor(self, regressor_predFitParams=None, regressor_predIntegral=None, regressor_predMaxdev=None):
         if regressor_predFitParams is None:
             return None
         
@@ -201,9 +259,12 @@ class PreClassifier_BDT:
         if regressor_predMaxdev is None:
             return None
         
-        list_dset = ['/'.join([self.path_to_data, f]) for f in os.listdir(self.path_to_data)[5000:5000+Ntest]]
+        print('Running the test predicting the integral and max deviation of the tails. Please wait....')
+        # list_dset = ['/'.join([self.path_to_data, f]) for f in os.listdir(self.path_to_data)[-Ntest:-1]]
+        # list_dset = self.list_dset[-Ntest:-1]
+        list_dset = self.list_test
         target_columns = self.target_columns + ['integral_R', 'max_deviation']
-        data_iter = Load_chunk_dset(path_to_dset=self.path_to_data, chunk_size=0, target_columns=target_columns)
+        data_iter = Load_chunk_dset(path_to_dset=self.path_to_data, chunk_size=self.chunk_size, target_columns=target_columns) # chunk_size is not used here because we will call npz2df instead of load
         
         # load the regression model trained to predict the value of the integral
         regressor_predIntegral_model = xgb.Booster()
@@ -215,7 +276,9 @@ class PreClassifier_BDT:
 
         comparison_df = pd.DataFrame()
         for j, f in enumerate(list_dset):
-            dtest, ytest = data_iter.npz2df(filepath=f, forTest_regressor=True)
+            # print(f'File number {j}')
+            Xtest, ytest = data_iter.npz2df(filepath=f, forTest_regressor=True)
+            dtest = dataframe2DMatrix(X=Xtest[data_iter.input_columns])
             # predict the fit parameters using the waveform as input
             predictions = regressor_predFitParams.predict(dtest)
             pred_df = pd.DataFrame({f'{self.target_columns[i]}': predictions.reshape(-1,1)[i] for i in range(len(self.target_columns))})
@@ -245,6 +308,9 @@ class PreClassifier_BDT:
 
             # concatenate
             pred_df = pd.concat([ytest_fitparams, pred_df], axis=1)
+            # print(Xtest.columns)
+            # print(ytest.columns)
+            pred_df['#Ch.#'] = [Xtest['#Ch.#'].iloc[0]]
             # integral
             pred_df['integral_R_truth_truth'] = [ytest['integral_R'].iloc[0]]
             pred_df['integral_R_truth_pred'] = pred_integral_ofTruth
@@ -258,11 +324,84 @@ class PreClassifier_BDT:
                 comparison_df = pred_df.copy()
             else:
                 comparison_df = pd.concat([comparison_df, pred_df.copy()], axis=0)
-
+        # save the output file to a csv
+        comparison_df.to_csv(f'{self.output_path}/predictions_fitparams_integral_maxdev.csv', index=True)
         return comparison_df
         
-    def classification(self):
-        pass
+    def testClassification(self, classifier_model_path=None, pred_int_maxDev_df=None): # a full chain test might be easier to implement : regression + classification
+        '''
+            Use the classifier model trained during classification to classify the interal and maximum deviation predicted by the regression model trained during pre-classification: true waveform -> predicted fit parameters -> predicted integral and max deviation -> class.
+        '''
+        print('Running test classifier....')
+        # list_dset = self.list_dset[-Ntest:-1]
+        list_dset = self.list_test
+        target_columns = ['class']
+        input_columns = self.target_columns + ['integral_R', 'max_deviation', '#Ch.#']
+        # input_columns = [f'{c}_truth' for c in tmp_input_columns]
+        data_iter = Load_chunk_dset(path_to_dset=self.path_to_data, chunk_size=0, target_columns=target_columns, input_columns=input_columns, Ntest=self.Ntest)
+        #
+        # load classifier model
+        classifier_model = xgb.Booster()
+        classifier_model.load_model(classifier_model_path)
+
+        # this is the truth. We can concatenate the rows because there's no waveform data points involved here.
+        truth_df = pd.DataFrame()
+        for ifile, file in enumerate(list_dset):
+            Xy_df = data_iter.npz2df(filepath=file, forTest_classifier=True, forTest_regressor=False)
+            if ifile==0:
+                truth_df = Xy_df.copy()
+            else:
+                truth_df = pd.concat([truth_df, Xy_df], axis=0)
+        truth_df = one_hot_encode_sklearn(data=truth_df, column_name='class')
+        # target_columns = [f'class_c{i}' for i in range(1, 5)]
+        #
+        # the predicted integral and max deviation along with the channel number is saved in pred_int_maxDev_df (argument).
+        output_regressor_pred_df = pred_int_maxDev_df[['integral_R_pred_pred', 'max_deviation_pred_pred']]
+        output_regressor_pred_df.columns = ['integral_R', 'max_deviation']
+        d_output_regressor_pred = dataframe2DMatrix(X=output_regressor_pred_df)
+        pred_classes = classifier_model.predict(d_output_regressor_pred)
+        #
+        # create a dataframe of the predicted classes
+        columns = [cl for cl in truth_df.columns if 'class' in cl]
+        predClass_df = pd.DataFrame(pred_classes, index=output_regressor_pred_df.index, columns=columns)
+        predClass_df['predicted_class'] = predClass_df.idxmax(axis=1)
+        #
+        # concatenate channel numbers to the created dataframe
+        predClass_df = pd.concat([predClass_df, pred_int_maxDev_df['#Ch.#']], axis=1, join='inner')
+        #
+        print(predClass_df)
+        truth_df['trueClass'] = pd.DataFrame(truth_df[columns].idxmax(axis=1), columns=['trueClass'])
+        # print(truth_df)
+        # combine truth and predicted class dataframe
+        # combined_df = pd.concat([truth_df['#Ch.#'], pd.DataFrame(truth_df[columns].idxmax(axis=1), columns=['trueClass']), predClass_df], axis=1, join='inner')
+        # combined_df = pd.concat([truth_df[['#Ch.#', 'trueClass']], predClass_df[['#Ch.#', 'predicted_class']]], axis=1, join='outer')
+        #
+        # try to concatenate all the truth information with the whole predicted data
+        combined_df = pd.concat([truth_df, predClass_df], axis=1, join='outer')
+        combined_df.to_csv(f'{self.output_path}/truth_and_prediction_fromClassifier.csv', index=True)
+        #
+        # Create confusion matrix
+        cm = confusion_matrix(y_true=combined_df['trueClass'], y_pred=combined_df['predicted_class'])
+
+        # Create a figure and axis
+        plt.figure(figsize=(10, 8))
+
+        # Create heatmap
+        cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        sns.heatmap(cm_normalized, annot=True, fmt='.1%', cmap='crest',
+                    xticklabels=columns,
+                    yticklabels=columns)
+
+        # Add labels
+        plt.xlabel('Predicted Class')
+        plt.ylabel('True Class')
+        plt.title('Confusion Matrix')
+
+        # Show plot
+        plt.tight_layout()
+        plt.savefig('OUTPUT/Preclassifier/confusionMatrix_.png')
+        plt.close()
+
 
 def compare_truth_pred(test_df: pd.DataFrame, output_path: str):
     param = 'integral_R'
@@ -272,8 +411,8 @@ def compare_truth_pred(test_df: pd.DataFrame, output_path: str):
     plt.hist(test_df[f'{param}_truth_truth'], histtype='step', bins=100, label='truth truth')
     plt.title(param)
     # plt.xlim([-2000, 2000])
-    plt.xscale('log')
-    plt.yscale('log')
+    # plt.xscale('log')
+    # plt.yscale('log')
     plt.legend()
     plt.savefig(f'{output_path}/comparison_integral_R.png')
     plt.close()
@@ -284,27 +423,50 @@ def compare_truth_pred(test_df: pd.DataFrame, output_path: str):
     plt.hist(test_df[f'{param}_pred_pred'], histtype='step', bins=100, label='pred pred')
     plt.hist(test_df[f'{param}_truth_truth'], histtype='step', bins=100, label='truth truth')
     plt.title(param)
-    plt.xlim([-250, 250])
+    # plt.xlim([-250, 250])
     # plt.xscale('log')
-    plt.yscale('log')
+    # plt.yscale('log')
     plt.legend()
     plt.savefig(f'{output_path}/comparison_max_deviation.png')
     plt.close()
     
 if __name__ == '__main__':
     # Generating training dataset
-    sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generated_new_samples_c3_labelled_tails.csv',
-                          output_path='data/labelledData/labelledData/WF_sim/')
-    sim_wf_obj.run()
+    # class c1
+    # print('Generating wf for class c1...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c2
+    # print('Generating wf for class c2...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c2_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c3
+    # print('Generating wf for class c3...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c3_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c4
+    # print('Generating wf for class c4...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c4_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
 
     # Training the regression models to predict the maximum deviation and integral of the tails
     target_columns = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
     # target_columns = ['class_c3']
     # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
     # chunk_dset_obj.test()
-    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns)
+    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
     regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
     #
     # Test the regression model and compare the result with the truth
-    test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, Ntest=5000, regressor_predIntegral='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/integral_R_model.json',
+    test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/integral_R_model.json',
                                             regressor_predMaxdev='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/max_deviation_model.json')
+    preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/classifier_resp_model.json', pred_int_maxDev_df=test_df)
+    # compare truth with prediction
+    compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
