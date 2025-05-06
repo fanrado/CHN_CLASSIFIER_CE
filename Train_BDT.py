@@ -98,7 +98,7 @@ class TrainBDT:
             # 'subsample' : [1.0],
             # 'colsample_bytree' : [0.8],
             'max_depth': [15],#, 20],
-            'learning_rate': [0.4],#, 0.3],
+            'learning_rate': [0.4, 0.3],
             # 'n_estimators': [50, 100, 150],
             'min_child_weight' : [15],#, 20],
             'subsample': [1.0],
@@ -547,7 +547,7 @@ def main():
             'figure.titlesize': 20
         })
     
-    root_path = 'data/labelledData/labelledData'
+    root_path = 'data/labelledData/labelledData/generatedSamples'
     # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT/synthetic'
     try:
@@ -567,18 +567,18 @@ def main():
     # # cols_input = ['t_p', 'k3', 'k4', 'k5', 'k6']
     cols_output = cols_output_classifier + ['integral_R', 'max_deviation']
     cols_output_regressor = ['integral_R', 'max_deviation']
-    xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
-                         cols_output_regressor=cols_output_regressor)
+    # xgb_obj.split_data(cols_input=cols_input, cols_output=cols_output, cols_output_classifier=cols_output_classifier,
+    #                      cols_output_regressor=cols_output_regressor)
+    # # #
+    # regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
     # #
-    regressor_maxDev_model = xgb_obj.RegressorModel(item_to_predict='max_deviation', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_maxDev_model, item_to_predict='max_deviation')
-    #
-    regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
-    xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
+    # regressor_int_model = xgb_obj.RegressorModel(item_to_predict='integral_R', saveModel=True)
+    # xgb_obj.test_regressor(xgb_regressor_model=regressor_int_model, item_to_predict='integral_R')
     
-    classifier_model = xgb_obj.ClassifierModel(saveModel=True)
-    xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
-    xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
+    # classifier_model = xgb_obj.ClassifierModel(saveModel=True)
+    # xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
+    # xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
     ##
     ## TESTING AFTER THE MODELS ARE TRAINED
     TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
