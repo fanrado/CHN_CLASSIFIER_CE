@@ -457,59 +457,6 @@ class LabelData:
                 outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
                 c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
     
-    # def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2'):
-    #     output_filename = 'generate_new_samples'
-    #     # class c2 and c3 were chosen because they don't have many sample points.
-    #     # The parameters we can generate from these two classes are not 100% sure to be class c2 or c3. They can always generate c1 and c4.
-    #     # If c1 and c4 are not enough, we can generate more of them later.
-    #     if target_class=='c2':
-    #         data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
-    #     else:
-    #         data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
-        
-    #     data_T = data.T
-    #     kde = gaussian_kde(data_T, bw_method='scott')
-
-    #     c_df = pd.DataFrame()
-    #     Total_Number_c = 0
-    #     while Total_Number_c < N_samples:
-    #         new_samples = kde.resample(1)
-    #         new_samples = new_samples.T
-    #         new_df = pd.DataFrame(new_samples, columns=self.all_columns)
-    #         #
-    #         # GPU-accelerated integral of the tail and max deviation
-    #         x = torch.linspace(
-    #             float(new_df['t'].iloc[0]),
-    #             float(new_df['t'].iloc[0]) + 70,
-    #             steps=70,
-    #             dtype=torch.float32,
-    #             device=self.device
-    #         )
-    #         par0 = torch.tensor(
-    #             new_df[self.response_params].iloc[0].values,
-    #             dtype=torch.float32,
-    #             device=self.device
-    #         )
-    #         int_R, max_dev = self.calculate_Integral_MaxDev_gpu(x=x, par0=par0)
-    #         integrals_R_selected = np.array([int_R.item()])
-    #         max_deviations       = np.array([max_dev.item()])
-            
-    #         if (np.abs(integrals_R_selected[0]) > 10000) or (np.abs(max_deviations[0]) > 1000):
-    #             continue
-    #         labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
-    #                                              plotHistClasses=False, plotComparisonResponses=False)
-            
-    #         if (Total_Number_c < N_samples) and (labelledData['class'].iloc[0]==target_class):
-    #             if Total_Number_c==0:
-    #                 c_df = labelledData
-    #                 Total_Number_c += 1
-    #             else:
-    #                 c_df = pd.concat([c_df, labelledData], axis=0)
-    #                 Total_Number_c += 1
-            
-    #         if Total_Number_c == N_samples:
-    #             outputfilename = output_filename + f'_{target_class}_labelled_tails.csv'
-    #             c_df.to_csv('/'.join([self.data_output_path, outputfilename]))
 
     def calculate_Integral_MaxDev_gpu_batch(self, pars: torch.Tensor):
         """
@@ -528,87 +475,93 @@ class LabelData:
 
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
+        # print(pos_peak)
+        # gather fixed‐length tail 50
+        try:
+            idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
+            R_tail       = R     .gather(1, idx_base)      # [B,50]
+            R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
 
-        # # gather fixed‐length tail 50
-        # idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
-        # R_tail       = R     .gather(1, idx_base)      # [B,50]
-        # R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
+            # integral via trapezoid
+            ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
 
-        # # integral via trapezoid
-        # ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
+            # 2‐pt avg via conv1d
+            kern = torch.tensor([0.5,0.5], device=self.device).view(1,1,2)
+            R_avg       = torch.nn.functional.conv1d(R_tail.unsqueeze(1), kern).squeeze(1)      # [B,49]
+            R_ideal_avg = torch.nn.functional.conv1d(R_ideal_tail.unsqueeze(1), kern).squeeze(1) # [B,49]
 
-        # # 2‐pt avg via conv1d
-        # kern = torch.tensor([0.5,0.5], device=self.device).view(1,1,2)
-        # R_avg       = torch.nn.functional.conv1d(R_tail.unsqueeze(1), kern).squeeze(1)      # [B,49]
-        # R_ideal_avg = torch.nn.functional.conv1d(R_ideal_tail.unsqueeze(1), kern).squeeze(1) # [B,49]
-
-        # # max deviation (signed)
-        # dev = R_avg - R_ideal_avg                                          # [B,49]
-        # mn, _ = dev.min(dim=1);  mx, _ = dev.max(dim=1)
-        # max_dev = torch.where(mn.abs() > mx.abs(), mn, mx)                # [B]
-        # VECTORIZED: Create tail indices directly
-        # First create ranges for each sample: [B, 50]
-        offsets = torch.arange(50, device=self.device).expand(B, 50)
-        # Add the peak positions: [B, 50]
-        indices = pos_peak.unsqueeze(1) + offsets
+            # max deviation (signed)
+            dev = R_avg - R_ideal_avg                                          # [B,49]
+            mn, _ = dev.min(dim=1);  mx, _ = dev.max(dim=1)
+            max_dev = torch.where(mn.abs() > mx.abs(), mn, mx)                # [B]
+        # # VECTORIZED: Create tail indices directly
+        # # First create ranges for each sample: [B, 50]
+        # offsets = torch.arange(50, device=self.device).expand(B, 50)
+        # # Add the peak positions: [B, 50]
+        # indices = pos_peak.unsqueeze(1) + offsets
         
-        # Create valid mask (indices within bounds)
-        valid_mask = indices < L
-        # Clamp indices to valid range
-        indices = torch.clamp(indices, 0, L-1)
+        # # Create valid mask (indices within bounds)
+        # valid_mask = indices < L
+        # # Clamp indices to valid range
+        # indices = torch.clamp(indices, 0, L-1)
         
-        # Gather with safe indices
-        batch_indices = torch.arange(B, device=self.device).view(B, 1).expand(B, 50)
-        R_tail = R[batch_indices, indices]
-        R_ideal_tail = R_ideal[batch_indices, indices]
+        # # Gather with safe indices
+        # batch_indices = torch.arange(B, device=self.device).view(B, 1).expand(B, 50)
+        # R_tail = R[batch_indices, indices]
+        # R_ideal_tail = R_ideal[batch_indices, indices]
         
-        # VECTORIZED: Integrate using trapezoidal rule with masking
-        # Get valid pairs for integration (need both points in a segment)
-        valid_segments = valid_mask[:, :-1] & valid_mask[:, 1:]
-        # Areas under each segment
-        segments = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
-        # Zero out invalid segments
-        segments = segments * valid_segments.float()
-        # Sum for each sample
-        ints = segments.sum(dim=1)
+        # # VECTORIZED: Integrate using trapezoidal rule with masking
+        # # Get valid pairs for integration (need both points in a segment)
+        # valid_segments = valid_mask[:, :-1] & valid_mask[:, 1:]
+        # # Areas under each segment
+        # segments = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
+        # # Zero out invalid segments
+        # segments = segments * valid_segments.float()
+        # # Sum for each sample
+        # ints = segments.sum(dim=1)
         
-        # VECTORIZED: 2-pt moving average without conv1d
-        R_avg = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
-        R_ideal_avg = (R_ideal_tail[:, :-1] + R_ideal_tail[:, 1:]) * 0.5
+        # # VECTORIZED: 2-pt moving average without conv1d
+        # R_avg = (R_tail[:, :-1] + R_tail[:, 1:]) * 0.5
+        # R_ideal_avg = (R_ideal_tail[:, :-1] + R_ideal_tail[:, 1:]) * 0.5
         
-        # VECTORIZED: Max deviation calculation
-        dev = R_avg - R_ideal_avg
+        # # VECTORIZED: Max deviation calculation
+        # dev = R_avg - R_ideal_avg
         
-        # Handle valid_mask for deviation
-        valid_mask_conv = valid_segments
+        # # Handle valid_mask for deviation
+        # valid_mask_conv = valid_segments
         
-        # Find max positive and negative deviations
-        # Apply large negative value to invalid positions for max
-        masked_dev_for_max = dev.clone()
-        masked_dev_for_max[~valid_mask_conv] = float('-inf')
-        max_dev_pos, _ = masked_dev_for_max.max(dim=1)
+        # # Find max positive and negative deviations
+        # # Apply large negative value to invalid positions for max
+        # masked_dev_for_max = dev.clone()
+        # masked_dev_for_max[~valid_mask_conv] = float('-inf')
+        # max_dev_pos, _ = masked_dev_for_max.max(dim=1)
         
-        # Apply large positive value to invalid positions for min
-        masked_dev_for_min = dev.clone()
-        masked_dev_for_min[~valid_mask_conv] = float('inf')
-        max_dev_neg, _ = masked_dev_for_min.min(dim=1)
+        # # Apply large positive value to invalid positions for min
+        # masked_dev_for_min = dev.clone()
+        # masked_dev_for_min[~valid_mask_conv] = float('inf')
+        # max_dev_neg, _ = masked_dev_for_min.min(dim=1)
         
-        # Select the one with larger magnitude
-        max_dev = torch.where(max_dev_neg.abs() > max_dev_pos.abs(), max_dev_neg, max_dev_pos)
+        # # Select the one with larger magnitude
+        # max_dev = torch.where(max_dev_neg.abs() > max_dev_pos.abs(), max_dev_neg, max_dev_pos)
         
-        # Handle case where all elements in a sample are invalid
-        all_invalid = ~valid_mask_conv.any(dim=1)
-        max_dev[all_invalid] = 0.0
-        return ints.cpu().numpy(), max_dev.cpu().numpy()
+        # # Handle case where all elements in a sample are invalid
+        # all_invalid = ~valid_mask_conv.any(dim=1)
+        # max_dev[all_invalid] = 0.0
+            return ints.cpu().numpy(), max_dev.cpu().numpy()
+        except:
+            return 1e8, 1e8
 
 
     def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2', batch_size=256):
         # … your setup up to kde …
         if target_class=='c2':
-            data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
+            data = self.source_data[self.all_columns][self.source_data['class']=='c2']
         else:
-            data = self.source_data[self.all_columns].to_numpy()
-        kde = gaussian_kde(data.T, bw_method='scott')
+            data = self.source_data[self.all_columns]
+
+        # mean_data, std_data = pd.DataFrame(data[self.response_params].mean()), pd.DataFrame(data[self.response_params].std())
+        
+        kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
 
         # out_rows = []
         all_df = pd.DataFrame()
@@ -620,29 +573,41 @@ class LabelData:
             # 2) compute ints & devs in one GPU call
             ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
             # del pars_t
-            torch.cuda.empty_cache() # release cached memory
+            # torch.cuda.empty_cache() # release cached memory
 
             # 3) filter too‐large tails
             mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
-
             if not mask1.any():
                 continue
             # 4) classify these masked ones on CPU *without* looping in python
             df = pd.DataFrame(new_params[mask1], columns=self.all_columns)
             df['integral_R']     = ints[mask1]
             df['max_deviation']  = devs[mask1]
-
+            
             # vectorized class assignment:
             df['class'] = np.where(
                (df['integral_R']<0)&(df['max_deviation']<0), 'c1',
-            np.where((df['integral_R']<=0)&(df['max_deviation']>0), 'c2',
-            np.where((df['integral_R']>0)&(df['max_deviation']<=0), 'c3','c4')))
+                np.where((df['integral_R']<=0)&(df['max_deviation']>0), 'c2',
+                np.where((df['integral_R']>0)&(df['max_deviation']<=0), 'c3', 'c4')))
 
             # 5) select only target_class
             sel = df['class']==target_class
             if sel.any():
                 if len(all_df)==0:
                     all_df = df[sel]
+                    # x = np.linspace(df['t'].iloc[0], df['t'].iloc[0]+70, 70)
+                    # par0 = list(df[self.response_params].iloc[0])
+                    # # try:
+                    # # calculate the response
+                    # R = response(x=x, par=par0)
+                    # R_ideal = response_legacy(x=x, par=par0)
+                    # plt.figure()
+                    # plt.plot(x, R, label=f'real, integral = {df['integral_R'].iloc[0]}')
+                    # plt.plot(x, R_ideal, label='ideal')
+                    # plt.legend()
+                    # plt.show()
+                    # plt.close()
+                    # return None
                 else:
                     all_df = pd.concat([all_df, df[sel]], axis=0)
                 # all_df.append(df[sel])
@@ -698,13 +663,13 @@ if __name__ == '__main__':
     # print(f'Total elpsed time : {total:.3f} s')
     # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c4
-    print('Class c4')
-    start_evt.record()
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=10000, target_class='c4', batch_size=10*4096)
-    end_evt.record()
-    torch.cuda.synchronize()    # wait until all GPU operations are done
-    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # print('Class c4')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=10000, target_class='c4', batch_size=10*4096)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     #
     # # c3
     # print('Class c3')
@@ -715,10 +680,10 @@ if __name__ == '__main__':
     # torch.cuda.synchronize()    # wait until all GPU operations are done
     # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # # c2
-    # print('Class c2')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c2', batch_size=512)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    print('Class c2')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=10, target_class='c2', batch_size=1100)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
