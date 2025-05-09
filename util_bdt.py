@@ -118,6 +118,20 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     return output
 
 def dataframe2DMatrix(X, y=None, multiOutputClassifier=False):
+    has_cudf = False
+    try:
+        import cudf
+        has_cudf = True
+    except ImportError:
+        has_cudf = False
+    
+    # Convert pandas to cudf if possible
+    if has_cudf:
+        if isinstance(X, pd.DataFrame):
+            X = cudf.from_pandas(X)
+        if y is not None and (isinstance(y, pd.DataFrame) or isinstance(y, pd.Series)):
+            y = cudf.from_pandas(y)
+
     if multiOutputClassifier:
         return xgb.DMatrix(X, label=y, enable_categorical=True)
     else:
