@@ -4,6 +4,7 @@ import uproot
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import randint, uniform
 
 from response import *
 
@@ -14,6 +15,9 @@ from sklearn.metrics import confusion_matrix
 
 import seaborn as sns
 import random
+
+# from sklearn.base import BaseEstimator, RegressorMixin
+# from sklearn.model_selection import RandomizedSearchCV
 
 class Sim_waveform:
     '''
@@ -138,7 +142,7 @@ class Load_chunk_dset:
         self.iter = 0
         return self
     
-    def load(self, tasktype='regression'):
+    def load(self, tasktype='regression', forRandomSearchCV=False):
         '''
             This function tries to load a chunk of the dataset. If successful, it returns a dMatrix. Otherwise, it returns None.
         '''
@@ -160,6 +164,8 @@ class Load_chunk_dset:
                 # use dataframes
                 y = chunk[self.target_columns]
                 X = chunk[self.input_columns]
+                if forRandomSearchCV:
+                    return X, y
                 return dataframe2DMatrix(X=X, y=y)
             elif tasktype=='classification':
                 tmp_chunk = one_hot_encode_sklearn(data=chunk, column_name='class')
@@ -169,7 +175,92 @@ class Load_chunk_dset:
         except:
             return None
     
-        
+
+def randomSearchCV(train_data_dict, param_distributions, n_iter=50, scoring='neg_mean_squared_error', cv=2):
+    """
+    Manually implement RandomizedSearchCV for xgb.Booster.
+
+    Parameters:
+    -----------
+    train_data_dict : list
+        List containing training input features and target values:
+        - train_data_dict[0]: Training input features (X_train)
+        - train_data_dict[1]: Training target values (y_train)
+
+    param_distributions : dict
+        Dictionary with hyperparameter names as distributions or lists of values to sample from.
+        Example:
+        {
+            'max_depth': randint(3, 10),
+            'learning_rate': uniform(0.01, 0.3),
+            'num_boost_round': randint(50, 300)
+        }
+
+    n_iter : int
+        Number of parameter settings to sample.
+
+    scoring : str
+        Scoring metric to evaluate the model. Default is 'neg_mean_squared_error'.
+
+    cv : int
+        Number of cross-validation folds.
+
+    Returns:
+    --------
+    dict
+        Dictionary containing the best parameters and the corresponding score.
+    """
+    X_train = train_data_dict[0]
+    y_train = train_data_dict[1]
+
+    # Convert data to DMatrix
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+
+    # Initialize variables to track the best parameters and score
+    best_params = None
+    best_score = float('inf') if scoring == 'neg_mean_squared_error' else -float('inf')
+
+    # Perform random search
+    for i in range(n_iter):
+        # Sample a random combination of hyperparameters
+        sampled_params = {key: dist.rvs() if hasattr(dist, 'rvs') else random.choice(dist)
+                          for key, dist in param_distributions.items()}
+
+        # Extract num_boost_round if present
+        num_boost_round = sampled_params.pop('num_boost_round', 100)
+
+        print(f"Iteration {i+1}/{n_iter}: Testing parameters: {sampled_params}")
+
+        # Perform cross-validation
+        cv_results = xgb.cv(
+            params=sampled_params,
+            dtrain=dtrain,
+            num_boost_round=num_boost_round,
+            nfold=cv,
+            metrics=('rmse' if scoring == 'neg_mean_squared_error' else scoring),
+            early_stopping_rounds=10,
+            seed=42,
+            verbose_eval=False
+        )
+
+        # Get the mean score from cross-validation
+        mean_score = cv_results['test-rmse-mean'].min() if scoring == 'neg_mean_squared_error' else cv_results['test-logloss-mean'].min()
+
+        print(f"Score for iteration {i+1}: {mean_score}")
+
+        # Update the best parameters and score if the current score is better
+        if (scoring == 'neg_mean_squared_error' and mean_score < best_score) or \
+           (scoring != 'neg_mean_squared_error' and mean_score > best_score):
+            best_score = mean_score
+            best_params = sampled_params
+            best_params['num_boost_round'] = num_boost_round
+
+    print("\nBest parameters found:")
+    print(f"Parameters: {best_params}")
+    print(f"Best score: {best_score}")
+
+    return {'best_params': best_params, 'best_score': best_score}
+
 class PreClassifier_BDT:
     '''
         Given a waveform as input, this class will:
@@ -190,7 +281,7 @@ class PreClassifier_BDT:
         self.path_to_data = path_to_data
         self.output_path = output_path
         self.target_columns = target_columns
-        self.chunk_size = 100
+        self.chunk_size = 5000
         self.list_dset = []
         self.list_test = []
         self.Ntest = Ntest
@@ -213,9 +304,9 @@ class PreClassifier_BDT:
             'eval_metric' : eval_metric,
             'tree_method': 'hist',
             'device': 'cuda',
-            'max_depth': 15,
+            'max_depth': 20,
             'learning_rate': 0.4,
-            'min_child_weight' : 15,
+            'min_child_weight' : 20,
             'num_boost_round': 200,
             'subsample': 1.0,
             'colsample_bytree': 1.0
@@ -226,16 +317,51 @@ class PreClassifier_BDT:
         # print(self.list_dset)
         self.list_test = data_iter.list_test
 
+        # Random search of the hyperparameters
+        # data_iter.chunk_size = int(len(self.list_dset)/10)-1
+        X, y = data_iter.load(tasktype='regression', forRandomSearchCV=True)
+        # Define the parameter distributions
+        param_distributions = {
+            'max_depth': randint(3, 10),
+            'learning_rate': uniform(0.01, 0.3),
+            'num_boost_round': randint(50, 300),
+            'min_child_weight': randint(1, 10),
+            'subsample': uniform(0.5, 0.6),
+            'colsample_bytree': uniform(0.5, 0.6),
+            'objective': [objective],
+            'eval_metric': [eval_metric],
+            'tree_method': ['hist'],
+            'device': ['cuda']
+        }
+
+        # Call the function
+        best_result = randomSearchCV(
+            train_data_dict=[X, y],  # Replace with your training data
+            param_distributions=param_distributions,
+            n_iter=10,
+            scoring='neg_mean_squared_error',
+            cv=5
+        )
+
+        print("Best parameters:", best_result['best_params'])
+        print("Best score:", best_result['best_score'])
+        ##
+        # sys.exit()
+
+        # data_iter.reset()
+        # data_iter.chunk_size = self.chunk_size
+        params = best_result['best_params'] # update parameters
+
         next_chunk = data_iter.load(tasktype=tasktype)
         eval_chunk = data_iter.load(tasktype=tasktype)
-        # regressor_model = xgb.XGBRegressor(**params)
-        # regressor_model.fit(X=next_chunk[0],y=next_chunk[1])
+        ## Replace by the custom wrapper
         bdt_model = xgb.train(params=params,
                                     dtrain = next_chunk,
                                     evals=[(next_chunk, 'train'), (eval_chunk, 'eval')],
                                     early_stopping_rounds=20,
                                     xgb_model=None,
                                     verbose_eval=True)
+        ##
         next_chunk = data_iter.load(tasktype=tasktype)
         eval_chunk = data_iter.load(tasktype=tasktype)
         while (next_chunk is not None) and (eval_chunk is not None):
@@ -247,7 +373,11 @@ class PreClassifier_BDT:
                                         verbose_eval=True)
             next_chunk = data_iter.load(tasktype=tasktype)
             eval_chunk = data_iter.load(tasktype=tasktype)
+        bdt_model.save_model(f'{self.output_path}/pred_fitParams_model.json')
+        # bdt_model.save_model(f'{self.output_path}/pred_fitParams_model.json')
+
         return bdt_model
+        # return bdt_model.model
     
     def testRegressor(self, regressor_predFitParams=None, regressor_predIntegral=None, regressor_predMaxdev=None):
         if regressor_predFitParams is None:
