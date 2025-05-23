@@ -323,11 +323,11 @@ class PreClassifier_BDT:
         # Define the parameter distributions
         param_distributions = {
             'max_depth': randint(3, 10),
-            'learning_rate': uniform(0.01, 0.3),
+            'learning_rate': uniform(0.01, 0.99),
             'num_boost_round': randint(50, 300),
             'min_child_weight': randint(1, 10),
-            'subsample': uniform(0.5, 0.6),
-            'colsample_bytree': uniform(0.5, 0.6),
+            'subsample': uniform(0.5, 0.5),
+            'colsample_bytree': uniform(0.5, 0.5),
             'objective': [objective],
             'eval_metric': [eval_metric],
             'tree_method': ['hist'],
