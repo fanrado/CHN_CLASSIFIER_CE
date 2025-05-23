@@ -162,6 +162,9 @@ class Load_chunk_dset:
             if tasktype=='regression':
                 # split features (input) and target values
                 # use dataframes
+                # print(chunk)
+                # sys.exit()
+                # chunk.dropna(axis=0, how='all', inplace=True)
                 y = chunk[self.target_columns]
                 X = chunk[self.input_columns]
                 if forRandomSearchCV:
@@ -281,7 +284,7 @@ class PreClassifier_BDT:
         self.path_to_data = path_to_data
         self.output_path = output_path
         self.target_columns = target_columns
-        self.chunk_size = 5000
+        self.chunk_size = 2000
         self.list_dset = []
         self.list_test = []
         self.Ntest = Ntest
@@ -322,10 +325,10 @@ class PreClassifier_BDT:
         X, y = data_iter.load(tasktype='regression', forRandomSearchCV=True)
         # Define the parameter distributions
         param_distributions = {
-            'max_depth': randint(3, 10),
-            'learning_rate': uniform(0.01, 0.99),
+            'max_depth': randint(3, 20),
+            'learning_rate': uniform(0.5, 0.4),
             'num_boost_round': randint(50, 300),
-            'min_child_weight': randint(1, 10),
+            'min_child_weight': randint(1, 20),
             'subsample': uniform(0.5, 0.5),
             'colsample_bytree': uniform(0.5, 0.5),
             'objective': [objective],
@@ -348,7 +351,7 @@ class PreClassifier_BDT:
         ##
         # sys.exit()
 
-        # data_iter.reset()
+        data_iter.reset()
         # data_iter.chunk_size = self.chunk_size
         params = best_result['best_params'] # update parameters
 
@@ -364,7 +367,7 @@ class PreClassifier_BDT:
         ##
         next_chunk = data_iter.load(tasktype=tasktype)
         eval_chunk = data_iter.load(tasktype=tasktype)
-        while (next_chunk is not None) and (eval_chunk is not None):
+        while (next_chunk is not None):# and (eval_chunk is not None):
             bdt_model = xgb.train(params=params,
                                         dtrain = next_chunk,
                                         xgb_model = bdt_model,
@@ -591,7 +594,8 @@ if __name__ == '__main__':
     # target_columns = ['class_c3']
     # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
     # chunk_dset_obj.test()
-    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
+    Ntest = 20000
+    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=Ntest)
     regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
     #
     # Test the regression model and compare the result with the truth
