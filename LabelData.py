@@ -426,7 +426,7 @@ class LabelData:
         if target_class=='c2':
             data = self.source_data[self.all_columns][self.source_data['class']=='c2'].to_numpy()
         elif isinstance(target_class, list):
-            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c2') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
+            data = self.source_data[self.all_columns][(self.source_data['class']=='c3') | (self.source_data['class']=='c1')| (self.source_data['class']=='c4')].to_numpy()
             target_class = target_class[0]
         data_T = data.T
         kde = gaussian_kde(data_T, bw_method='scott')
