@@ -558,7 +558,8 @@ class LabelData:
             data = self.source_data[self.all_columns][self.source_data['class']=='c2']
         else:
             data = self.source_data[self.all_columns]
-
+        # print(data.head())
+        # sys.exit()
         # mean_data, std_data = pd.DataFrame(data[self.response_params].mean()), pd.DataFrame(data[self.response_params].std())
         
         kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
@@ -568,53 +569,39 @@ class LabelData:
         while len(all_df) < N_samples:
             # 1) draw batch_size new params via KDE
             new_params = kde.resample(batch_size).T                             # [B,D] CPU
-            pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
+            try:
+                pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
 
-            # 2) compute ints & devs in one GPU call
-            ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
-            # del pars_t
-            # torch.cuda.empty_cache() # release cached memory
+                # 2) compute ints & devs in one GPU call
+                ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
+                # del pars_t
+                # torch.cuda.empty_cache() # release cached memory
 
-            # 3) filter too‐large tails
-            mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
-            if not mask1.any():
-                continue
-            # 4) classify these masked ones on CPU *without* looping in python
-            df = pd.DataFrame(new_params[mask1], columns=self.all_columns)
-            df['integral_R']     = ints[mask1]
-            df['max_deviation']  = devs[mask1]
-            
-            # vectorized class assignment:
-            df['class'] = np.where(
-               (df['integral_R']<0)&(df['max_deviation']<0), 'c1',
-                np.where((df['integral_R']<=0)&(df['max_deviation']>0), 'c2',
-                np.where((df['integral_R']>0)&(df['max_deviation']<=0), 'c3', 'c4')))
+                # 3) filter too‐large tails
+                mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
+                if not mask1.any():
+                    continue
+                # 4) classify these masked ones on CPU *without* looping in python
+                df = pd.DataFrame(new_params[mask1], columns=self.all_columns)
+                df['integral_R']     = ints[mask1]
+                df['max_deviation']  = devs[mask1]
+                
+                # vectorized class assignment:
+                df['class'] = np.where(
+                (df['integral_R']<0)&(df['max_deviation']<0), 'c1',
+                    np.where((df['integral_R']<=0)&(df['max_deviation']>0), 'c2',
+                    np.where((df['integral_R']>0)&(df['max_deviation']<=0), 'c3', 'c4')))
 
-            # 5) select only target_class
-            sel = df['class']==target_class
-            if sel.any():
-                if len(all_df)==0:
-                    all_df = df[sel]
-                    # x = np.linspace(df['t'].iloc[0], df['t'].iloc[0]+70, 70)
-                    # par0 = list(df[self.response_params].iloc[0])
-                    # # try:
-                    # # calculate the response
-                    # R = response(x=x, par=par0)
-                    # R_ideal = response_legacy(x=x, par=par0)
-                    # plt.figure()
-                    # plt.plot(x, R, label=f'real, integral = {df['integral_R'].iloc[0]}')
-                    # plt.plot(x, R_ideal, label='ideal')
-                    # plt.legend()
-                    # plt.show()
-                    # plt.close()
-                    # return None
-                else:
-                    all_df = pd.concat([all_df, df[sel]], axis=0)
-                # all_df.append(df[sel])
-                # print(df[sel])
-                print(len(all_df))
-                # flatten list-of-frames if we overshot:
-                # all_df = pd.concat(out_rows, axis=0).head(N_samples)
+                # 5) select only target_class
+                sel = df['class']==target_class
+                if sel.any():
+                    if len(all_df)==0:
+                        all_df = df[sel]
+                    else:
+                        all_df = pd.concat([all_df, df[sel]], axis=0)
+                    print(len(all_df))
+            except:
+                pass
         
         # drop unnecessary column
         cols_to_drop = [col for col in all_df.columns if 'Unnamed' in col]
@@ -650,12 +637,12 @@ if __name__ == '__main__':
     # start is for the total time CPU + GPU
     start = time.perf_counter()
     torch.cuda.synchronize()    # drain any prior work
-    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
+    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
     labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     # print('Class c1')
     # start_evt.record()
     # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c1', batch_size=4*4096)
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c1', batch_size=4096)
     # end_evt.record()
     
     # torch.cuda.synchronize()    # wait until all GPU operations are done
@@ -663,27 +650,27 @@ if __name__ == '__main__':
     # print(f'Total elpsed time : {total:.3f} s')
     # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c4
-    # print('Class c4')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=10000, target_class='c4', batch_size=10*4096)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    #
+    print('Class c4')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c4', batch_size=6*4096)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    
     # # c3
     # print('Class c3')
     # start_evt.record()
     # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=200000, target_class='c3', batch_size=32)
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c3', batch_size=4096)
     # end_evt.record()
     # torch.cuda.synchronize()    # wait until all GPU operations are done
     # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    # # c2
-    print('Class c2')
-    start_evt.record()
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=10, target_class='c2', batch_size=1100)
-    end_evt.record()
-    torch.cuda.synchronize()    # wait until all GPU operations are done
-    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # # # c2
+    # print('Class c2')
+    # start_evt.record()
+    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c2', batch_size=4096)
+    # end_evt.record()
+    # torch.cuda.synchronize()    # wait until all GPU operations are done
+    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
