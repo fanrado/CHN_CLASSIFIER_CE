@@ -20,7 +20,7 @@ def get_data(data_id):
     """
     try:
         record = csv_model.data[csv_model.data['#Ch.#']==int(data_id)]
-        print(record)
+        # print(record) #
         if record.empty:
             return jsonify({"error": "Record not found"}), 404
         return jsonify(record.to_dict(orient='records')[0]), 200
