@@ -586,7 +586,7 @@ if __name__ == '__main__':
     # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
 
     ## GENERATE NEW DATASET using GPU
-    batch_size = 4*4096
+    batch_size = 20*4096
     # related to GPU kernel time
     start_evt   = torch.cuda.Event(enable_timing=True)
     end_evt     = torch.cuda.Event(enable_timing=True)
@@ -595,16 +595,16 @@ if __name__ == '__main__':
     torch.cuda.synchronize()    # drain any prior work
     list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
     labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
-    # print('Class c1')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c1', batch_size=batch_size)
-    # end_evt.record()
+    print('Class c1')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=400000, target_class='c1', batch_size=batch_size)
+    end_evt.record()
     
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # total = time.perf_counter() - start
-    # print(f'Total elpsed time : {total:.3f} s')
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    total = time.perf_counter() - start
+    print(f'Total elpsed time : {total:.3f} s')
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c4
     print('Class c4')
     start_evt.record()
