@@ -1,5 +1,6 @@
 name: backend-api-env
 channels:
+  - conda-forge
   - anaconda
   - defaults
   - https://repo.anaconda.com/pkgs/main
@@ -7,7 +8,9 @@ channels:
 dependencies:
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=5.1=1_gnu
+  - blas=1.0=openblas
   - blinker=1.9.0=py312h06a4308_0
+  - bottleneck=1.4.2=py312ha883a20_0
   - bzip2=1.0.8=h5eee18b_6
   - ca-certificates=2025.2.25=h06a4308_0
   - click=8.1.8=py312h06a4308_0
@@ -17,17 +20,29 @@ dependencies:
   - jinja2=3.1.6=py312h06a4308_0
   - ld_impl_linux-64=2.40=h12ee557_0
   - libffi=3.4.4=h6a678d5_1
-  - libgcc-ng=11.2.0=h1234567_1
-  - libgomp=11.2.0=h1234567_1
+  - libgcc=15.1.0=h767d61c_2
+  - libgcc-ng=15.1.0=h69a702a_2
+  - libgfortran-ng=11.2.0=h00389a5_1
+  - libgfortran5=11.2.0=h1234567_1
+  - libgomp=15.1.0=h767d61c_2
+  - libopenblas=0.3.29=ha39b09d_0
   - libstdcxx-ng=11.2.0=h1234567_1
   - libuuid=1.41.5=h5eee18b_0
   - markupsafe=3.0.2=py312h5eee18b_0
   - ncurses=6.4=h6a678d5_0
+  - numexpr=2.10.1=py312hd28fd6d_0
+  - numpy=2.0.1=py312h2809609_1
+  - numpy-base=2.0.1=py312he1a6c75_1
   - openssl=3.0.16=h5eee18b_0
+  - pandas=2.2.3=py312h6a678d5_0
   - pip=25.1=pyhc872135_2
   - python=3.12.2=h996f2a0_0
+  - python-dateutil=2.9.0post0=py312h06a4308_2
+  - python-tzdata=2025.2=pyhd3eb1b0_0
+  - pytz=2024.1=py312h06a4308_0
   - readline=8.2=h5eee18b_0
   - setuptools=78.1.1=py312h06a4308_0
+  - six=1.17.0=py312h06a4308_0
   - sqlite=3.45.3=h5eee18b_0
   - tk=8.6.14=h39e8969_0
   - tzdata=2025b=h04d1e81_0
@@ -35,4 +50,8 @@ dependencies:
   - wheel=0.45.1=py312h06a4308_0
   - xz=5.6.4=h5eee18b_1
   - zlib=1.2.13=h5eee18b_1
+  - pip:
+      - nvidia-nccl-cu12==2.26.5
+      - scipy==1.15.3
+      - xgboost==3.0.0
 prefix: /home/rado/Software/anaconda3/envs/backend-api-env

@@ -1,9 +1,20 @@
 blinker @ file:///croot/blinker_1737448726027/work
+Bottleneck @ file:///croot/bottleneck_1731058641041/work
 click @ file:///croot/click_1744271578095/work
 Flask @ file:///croot/flask_1737454299809/work
 itsdangerous @ file:///croot/itsdangerous_1716533337253/work
 Jinja2 @ file:///croot/jinja2_1741710844255/work
 MarkupSafe @ file:///croot/markupsafe_1738584038848/work
+numexpr @ file:///croot/numexpr_1730215937391/work
+numpy @ file:///croot/numpy_and_numpy_base_1725470312869/work/dist/numpy-2.0.1-cp312-cp312-linux_x86_64.whl#sha256=0a2920303d36e9da3063f2d20885cb28d54fe6af2e1bee9bb30b48855a54664e
+nvidia-nccl-cu12==2.26.5
+pandas @ file:///croot/pandas_1732735089971/work/dist/pandas-2.2.3-cp312-cp312-linux_x86_64.whl#sha256=57b66702d418720ec8483f7c4ec7c08d41815316ad7ce09d5b7bbc34eefcfdfd
+python-dateutil @ file:///croot/python-dateutil_1716495738603/work
+pytz @ file:///croot/pytz_1713974312559/work
+scipy==1.15.3
 setuptools==78.1.1
+six @ file:///croot/six_1744271502820/work
+tzdata @ file:///croot/python-tzdata_1746123641790/work
 Werkzeug @ file:///croot/werkzeug_1737448706492/work
 wheel==0.45.1
+xgboost @ file:///media/rado/RADO/WORKSPACE/CE_Project/api/temp_wheels/xgboost-3.0.0-py3-none-manylinux_2_28_x86_64.whl#sha256=61c7e391e373b8a5312503525c0689f83ef1912a1236377022865ab340f465a4
