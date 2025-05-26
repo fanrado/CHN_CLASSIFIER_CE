@@ -502,11 +502,17 @@ class LabelData:
 
     def GenerateNewSamples_gpu(self, N_samples=1000, target_class='c2', batch_size=256):
         # … your setup up to kde …
-        if target_class=='c2':
+        if target_class=='c1':
+            data = self.source_data[self.all_columns][self.source_data['class']=='c1']
+        elif target_class=='c2':
             data = self.source_data[self.all_columns][self.source_data['class']=='c2']
-        else:
-            data = self.source_data[self.all_columns]
-        
+        elif target_class=='c3':
+            data = self.source_data[self.all_columns][self.source_data['class']=='c3']
+        elif target_class=='c4':
+            data = self.source_data[self.all_columns][self.source_data['class']=='c4']
+        # else:
+        #     data = self.source_data[self.all_columns]
+        # data = self.source_data[self.all_columns]
         data = data.dropna(axis=0)
         kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
         dim = len(self.all_columns)
