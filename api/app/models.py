@@ -9,14 +9,17 @@ class CSVModel:
         self.csv_file_path = csv_file_path
         self.model_file_path = model_file_path
         self.data = self.load_csv()
-        self.model = self.load_model()
+        # print(self.data[self.data['#Ch.#']==5])
+        # self.model = self.load_model()
 
     def load_csv(self):
         """
         Load the CSV file into a pandas DataFrame.
         """
         try:
-            return pd.read_csv(self.csv_file_path)
+            df = pd.read_csv(self.csv_file_path)
+            # return pd.read_csv(self.csv_file_path)
+            return df
         except FileNotFoundError:
             print(f"CSV file not found at {self.csv_file_path}. Creating an empty DataFrame.")
             return pd.DataFrame()
