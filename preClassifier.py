@@ -572,66 +572,135 @@ class TestPreclassifier:
             - Load the xgb model to predict the class -> Save it in a dictionary.
             --> Save all of the predicted items in a dictionary named "predictions"
     """
-    def __init__(self, path_to_root_file=''):
+    def __init__(self, path_to_root_file='', hist_prefix='hist_0'):
         self.path_to_root_file = path_to_root_file
+        self.hist_prefix = hist_prefix
+        self.root_data = self.read_ROOT(filename=self.path_to_root_file, hist_prefix=hist_prefix)
         self.chn_response = None
         self.predictions = None
+        self.__fit_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
     
-    def read_ROOT(self):
-        pass
-
+    def read_ROOT(self, filename, hist_prefix='hist_0'):
+        root_file = uproot.open(filename)
+        return root_file
+    
+    def get_histogram(self, root_data, histname):
+        TH1D_hist = root_data[histname].to_numpy()
+        return TH1D_hist
+    
     def getCHN_resp(self, chn):
-        pass
+        histname = '_'.join([self.hist_prefix, 'channel', f'{chn};1'])
+        hist = self.get_histogram(root_data=self.root_data, histname=histname)
+        wf_dict = {f'p{i}': [hist[0][i]] for i in range(70)}
+        wf_dict['#Ch.#'] = [chn]
+        wf_df = pd.DataFrame(wf_dict)
+        return wf_df
 
-    def predict_fitParams(self, chn_resp_hist):
-        pass
+    def predict_fitParams(self, path_pred_fitParams_model,   chn_resp_hist):
+        pred_fitParams_model = xgb.Booster()
+        pred_fitParams_model.load_model(path_pred_fitParams_model)
+        print('here')
+        dtest = dataframe2DMatrix(X=chn_resp_hist)
+        # predict the fit parameters using the waveform as input
+        predicted_fitParams = pred_fitParams_model.predict(dtest)
+        predicted_fitParams_df = pd.DataFrame({f'{key}': predicted_fitParams.reshape(-1, 1)[i] for i, key in enumerate(self.__fit_params)})
+        # print(predicted_fitParams_df)
+        # return predicted_fitParams.flatten()
+        return predicted_fitParams_df
 
-    def predict_integral_tailR(self, fit_params):
-        pass
+    def predict_integral_tailR(self, path_pred_integralR_model, fit_params_df):
+        pred_integralR_model = xgb.Booster()
+        pred_integralR_model.load_model(path_pred_integralR_model)
+        dtest = dataframe2DMatrix(X=fit_params_df)
+        predicted_integralR = pred_integralR_model.predict(dtest)
+        return predicted_integralR.flatten()
 
-    def predict_max_dev_tail(self, fit_params):
-        pass
+    def predict_max_dev_tail(self, path_pred_max_deviation_model, fit_params_df):
+        pred_max_deviation_model = xgb.Booster()
+        pred_max_deviation_model.load_model(path_pred_max_deviation_model)
+        dtest = dataframe2DMatrix(X=fit_params_df)
+        predicted_max_deviation = pred_max_deviation_model.predict(dtest)
+        return predicted_max_deviation.flatten()
 
-    def predict_class(self, integral_tailR, max_dev_tail):
-        pass
+    def predict_class(self, path_classifier_int_maxdev_model, integral_R, max_deviation):
+        classifier_int_maxdev_model = xgb.Booster()
+        classifier_int_maxdev_model.load_model(path_classifier_int_maxdev_model)
+        # output_regressor_pred_df.columns = ['integral_R', 'max_deviation']
+        test_df = pd.DataFrame({'integral_R': integral_R, 'max_deviation': max_deviation})
+        d_output_regressor_pred = dataframe2DMatrix(X=test_df)
+        pred_classes = classifier_int_maxdev_model.predict(d_output_regressor_pred)
+        # print(pred_classes)
+        # columns = [cl for cl in truth_df.columns if 'class' in cl]
+        columns = [f'class_c{i}' for i in range(1, 5)]
+        predClass_df = pd.DataFrame(pred_classes, index=test_df.index, columns=columns)
+        predClass_df['predicted_class'] = predClass_df.idxmax(axis=1)
+        predClass_df.drop(columns, axis=1, inplace=True)
+        output_df = pd.concat([test_df, predClass_df], axis=1)
+        output_df['predicted_class'] = output_df['predicted_class'].apply(lambda x: x.split('_')[1])
+        print(output_df)
+        return output_df
 
-if __name__ == '__main__':
-    # Generating training dataset
-    # class c1
-    # print('Generating wf for class c1...')
-    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
-    #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # sim_wf_obj.run()
+if __name__=='__main__':
+    # # Generating training dataset
+    # # class c1
+    # # print('Generating wf for class c1...')
+    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
+    # #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # # sim_wf_obj.run()
 
-    # # class c2
-    # print('Generating wf for class c2...')
-    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c2_labelled_tails.csv',
-    #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # sim_wf_obj.run()
+    # # # class c2
+    # # print('Generating wf for class c2...')
+    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c2_labelled_tails.csv',
+    # #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # # sim_wf_obj.run()
 
-    # # class c3
-    # print('Generating wf for class c3...')
-    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c3_labelled_tails.csv',
-    #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # sim_wf_obj.run()
+    # # # class c3
+    # # print('Generating wf for class c3...')
+    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c3_labelled_tails.csv',
+    # #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # # sim_wf_obj.run()
 
-    # # class c4
-    # print('Generating wf for class c4...')
-    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c4_labelled_tails.csv',
-    #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # sim_wf_obj.run()
+    # # # class c4
+    # # print('Generating wf for class c4...')
+    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c4_labelled_tails.csv',
+    # #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # # sim_wf_obj.run()
 
-    # Training the regression models to predict the maximum deviation and integral of the tails
-    target_columns = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
-    # target_columns = ['class_c3']
-    # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
-    # chunk_dset_obj.test()
-    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData_cpu/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
-    regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
-    #
-    # Test the regression model and compare the result with the truth
-    test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
-                                            regressor_predMaxdev='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json')
-    preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json', pred_int_maxDev_df=test_df)
-    # compare truth with prediction
-    compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
+    # # Training the regression models to predict the maximum deviation and integral of the tails
+    # target_columns = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+    # # target_columns = ['class_c3']
+    # # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
+    # # chunk_dset_obj.test()
+    # preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData_cpu/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
+    # regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
+    # #
+    # # Test the regression model and compare the result with the truth
+    # test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
+    #                                         regressor_predMaxdev='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json')
+    # preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json', pred_int_maxDev_df=test_df)
+    # # compare truth with prediction
+    # compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
+
+    ## TEST PRE-CLASSIFIER
+    test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
+    hist_test = test_.getCHN_resp(chn=0)
+    h = hist_test[[f'p{i}' for i in range(70)]].iloc[0]
+    pred_par = test_.predict_fitParams(path_pred_fitParams_model='OUTPUT/Preclassifier/pred_fitParams_model.json', chn_resp_hist=hist_test)
+    pred_integralR = test_.predict_integral_tailR(path_pred_integralR_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
+                                 fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
+    pred_max_dev = test_.predict_max_dev_tail(path_pred_max_deviation_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json',
+                                              fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
+    test_.predict_class(path_classifier_int_maxdev_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json',
+                        integral_R=pred_integralR, max_deviation=pred_max_dev)
+    # print(pred_par)
+    params = pred_par.iloc[0].values
+    x = np.linspace(params[0], params[0]+70, 70)
+    R = response(x=x, par=params)
+    R_ideal = response_legacy(x=x, par=params)
+    plt.figure()
+    plt.stairs(h, label='data')
+    plt.plot(R, label='real')
+    plt.plot(R_ideal, label='ideal')
+    plt.title(f'integral tail = {pred_integralR}\n max deviation = {pred_max_dev}')
+    plt.legend()
+    plt.show()
