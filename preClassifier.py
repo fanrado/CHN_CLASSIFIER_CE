@@ -560,6 +560,41 @@ def compare_truth_pred(test_df: pd.DataFrame, output_path: str):
     plt.savefig(f'{output_path}/comparison_max_deviation.png')
     plt.close()
     
+
+import uproot
+class TestPreclassifier:
+    """
+        This class will be used for the following tasks:
+            - open a root file.
+            - Get one 1d histogram of the channel response and store it in a numpy array.
+            - Load the xgb model to predict the fit parameters -> Store them in a dictionary.
+            - Load the xgb models to predict the integral of the tail and the maximum deviation of the tail from the ideal response using the predicted fit parameters -> Save them in a dictionary.
+            - Load the xgb model to predict the class -> Save it in a dictionary.
+            --> Save all of the predicted items in a dictionary named "predictions"
+    """
+    def __init__(self, path_to_root_file=''):
+        self.path_to_root_file = path_to_root_file
+        self.chn_response = None
+        self.predictions = None
+    
+    def read_ROOT(self):
+        pass
+
+    def getCHN_resp(self, chn):
+        pass
+
+    def predict_fitParams(self, chn_resp_hist):
+        pass
+
+    def predict_integral_tailR(self, fit_params):
+        pass
+
+    def predict_max_dev_tail(self, fit_params):
+        pass
+
+    def predict_class(self, integral_tailR, max_dev_tail):
+        pass
+
 if __name__ == '__main__':
     # Generating training dataset
     # class c1
