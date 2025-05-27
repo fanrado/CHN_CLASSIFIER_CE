@@ -591,12 +591,12 @@ if __name__ == '__main__':
     # target_columns = ['class_c3']
     # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
     # chunk_dset_obj.test()
-    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
+    preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData_cpu/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
     regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
     #
     # Test the regression model and compare the result with the truth
-    test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/integral_R_model.json',
-                                            regressor_predMaxdev='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/max_deviation_model.json')
-    preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/OK_SIMULATION_moreSamplesThanApr12_2025/classifier_resp_model.json', pred_int_maxDev_df=test_df)
+    test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
+                                            regressor_predMaxdev='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json')
+    preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json', pred_int_maxDev_df=test_df)
     # compare truth with prediction
     compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
