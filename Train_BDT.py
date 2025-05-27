@@ -91,8 +91,8 @@ class TrainBDT:
                 dict: Best parameters found during grid search
         """
         param_grid = {
-            # 'max_depth' : [5, 7, 10, 15, 20],
-            # 'learning_rate': [0.6, 0.5, 0.4, 0.3, 0.2],
+            # 'max_depth' : [3, 5, 7, 10],
+            # 'learning_rate': [0.6, 0.5, 0.4, 0.3],
             # 'n_estimators': [100, 200],
             # 'min_child_weight' : [3, 5, 7],
             # 'subsample' : [1.0],
@@ -101,8 +101,8 @@ class TrainBDT:
             'learning_rate': [0.4, 0.3],
             # 'n_estimators': [50, 100, 150],
             'min_child_weight' : [15],#, 20],
-            'subsample': [1.0],
-            'colsample_bytree': [1.0]
+            'subsample': [0.7, 0.9],
+            'colsample_bytree': [0.7, 0.9]
         }
         best_params_regressor = gridSearch_Regressor(train_data_dict=splitted_data_regressor, param_grid=param_grid,
                                                      item_to_predict=item_to_predict, regressor=regressor)
@@ -547,8 +547,8 @@ def main():
             'figure.titlesize': 20
         })
     
-    # root_path = 'data/labelledData/labelledData/generatedSamples'
-    root_path = 'data/labelledData/labelledData'
+    # root_path = 'data/labelledData/labelledData/'
+    root_path = 'data/labelledData/labelledData_cpu/generatedSamples'
     # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT/synthetic'
     try:
