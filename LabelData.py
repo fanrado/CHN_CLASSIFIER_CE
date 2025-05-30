@@ -414,6 +414,7 @@ class LabelData:
             tmpdata = self.__read_sourcedata(filename=f, sep=sep)
             if i==0:
                 data = tmpdata.copy()
+                # break
             else:
                 data = pd.concat([data, tmpdata], axis=0)
             # if i==2:
@@ -478,11 +479,29 @@ class LabelData:
 
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
-        # print(pos_peak)
+        
+        # # DEBUG
+        # # print(pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50))
+        # idx_base = pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50)
+        # print(idx_base)
+        # # sys.exit()
+        # R_tail       = R.gather(1, idx_base)      # [B,50]
+        # R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
+        # # print(R_tail.cpu().numpy().flatten())
+        # # print(R_ideal.cpu().numpy().flatten())
+        # print(R.cpu().numpy().flatten())
+        # plt.figure()
+        # # plt.plot(xs.cpu().numpy().flatten(), R.cpu().numpy().flatten())
+        # plt.plot(R.cpu().numpy().flatten())
+        # # plt.plot(R_tail.cpu().numpy().flatten(), label='tail')
+        # # plt.xlim([-10, 50])
+        # plt.legend()
+        # plt.savefig('OUTPUT/debug.png')
+        # sys.exit()
         # gather fixed‐length tail 50
         try:
-            idx_base = pos_peak.unsqueeze(1) + torch.arange(50, device=self.device).view(1,50)
-            R_tail       = R     .gather(1, idx_base)      # [B,50]
+            idx_base = pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50)
+            R_tail       = R.gather(1, idx_base)      # [B,50]
             R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
 
             # integral via trapezoid
@@ -514,8 +533,7 @@ class LabelData:
             data = self.source_data[self.all_columns][self.source_data['class']=='c4']
         # else:
         #     data = self.source_data[self.all_columns]
-        # data = self.source_data[self.all_columns]
-
+        # # data = self.source_data[self.all_columns]
         # Determine the ranges of the parameters to be generated
         t_mean, t_std = np.mean(data['t']), np.std(data['t'])
         A_0_mean, A_0_std = np.mean(data['A_0']), np.std(data['A_0'])
@@ -524,6 +542,8 @@ class LabelData:
         k4_mean, k4_std = np.mean(data['k4']), np.std(data['k4'])
         k5_mean, k5_std = np.mean(data['k5']), np.std(data['k5'])
         k6_mean, k6_std = np.mean(data['k6']), np.std(data['k6'])
+        integral_mean, integral_std = np.mean(data['integral_R']), np.std(data['integral_R'])
+        maxdev_mean, maxdev_std = np.mean(data['max_deviation']), np.std(data['max_deviation'])
 
         data = data.dropna(axis=0)
         kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
@@ -533,7 +553,7 @@ class LabelData:
         all_df = pd.DataFrame()
         while len(all_df) < N_samples:
             # 1) draw batch_size new params via KDE
-            new_params = kde.resample(batch_size).T                             # [B,D] CPU
+            new_params = np.array(kde.resample(batch_size).T, dtype=np.float32)                             # [B,D] CPU
             if not np.isfinite(new_params).all():
                 print("Invalid values detected in new params. Skipping this batch.")
                 continue
@@ -542,31 +562,43 @@ class LabelData:
                 continue
             
             pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
+            # print(pars_t.cpu().numpy() == new_params)
+            # print(new_params)
+            # sys.exit()
             try:
                 # 2) compute ints & devs in one GPU call
                 ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
             except:
                 # print(pars_t.cpu().numpy())
                 continue
+            # print(ints, devs)
 
             # 3) filter too‐large tails
             mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
             if not mask1.any():
                 continue
             # 4) classify these masked ones on CPU *without* looping in python
+            # tmpdf = pd.DataFrame(new_params[mask1], columns=self.all_columns)
             tmpdf = pd.DataFrame(new_params[mask1], columns=self.all_columns)
             tmpdf['integral_R']     = ints[mask1]
             tmpdf['max_deviation']  = devs[mask1]
             
             # MASKS
             mask_t = (tmpdf['t']>= (t_mean-2.5*t_std)) & (tmpdf['t']<=(t_mean+2.5*t_std))
-            mask_A_0 = (tmpdf['A_0']>= (A_0_mean-2.5*A_0_std)) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
+            # mask_A_0 = (tmpdf['A_0']>= (A_0_mean-2.5*A_0_std)) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
+            mask_A_0 = (tmpdf['A_0']> 0) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
             mask_t_p = (tmpdf['t_p']>= (t_p_mean-2.5*t_p_std)) & (tmpdf['t_p']<=(t_p_mean+2.5*t_p_std))
-            mask_k3 = (tmpdf['k3']>= (k3_mean-2.5*k3_std)) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
-            mask_k4 = (tmpdf['k4']>= (k4_mean-2.5*k4_std)) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
-            mask_k5 = (tmpdf['k5']>= (k5_mean-2.5*k5_std)) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
-            mask_k6 = (tmpdf['k6']>= (k6_mean-2.5*k6_std)) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
-            df = tmpdf[mask_t & mask_A_0 & mask_t_p & mask_k3 & mask_k4 & mask_k5 & mask_k6].copy()
+            # mask_k3 = (tmpdf['k3']>= (k3_mean-2.5*k3_std)) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
+            # mask_k4 = (tmpdf['k4']>= (k4_mean-2.5*k4_std)) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
+            # mask_k5 = (tmpdf['k5']>= (k5_mean-2.5*k5_std)) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
+            # mask_k6 = (tmpdf['k6']>= (k6_mean-2.5*k6_std)) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
+            mask_k3 = (tmpdf['k3']>= 0) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
+            mask_k4 = (tmpdf['k4']>= 0) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
+            mask_k5 = (tmpdf['k5']>= 0) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
+            mask_k6 = (tmpdf['k6']>= 0) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
+            mask_integral = (tmpdf['integral_R']>= (integral_mean-2.5*integral_std)) & (tmpdf['integral_R']<=(integral_mean+2.5*integral_std))
+            mask_max_dev = (tmpdf['max_deviation']>= (maxdev_mean-2.5*maxdev_std)) & (tmpdf['max_deviation']<=(maxdev_mean+2.5*maxdev_std))
+            df = tmpdf[mask_t & mask_A_0 & mask_t_p & mask_k3 & mask_k4 & mask_k5 & mask_k6 & mask_integral & mask_max_dev].copy()
 
             # vectorized class assignment:
             df['class'] = np.where(
@@ -615,7 +647,9 @@ if __name__ == '__main__':
     # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
 
     ## GENERATE NEW DATASET using GPU
-    batch_size = 512
+    batch_size = 1
+    N1 = 1000
+    N2 = 1000
     # related to GPU kernel time
     start_evt   = torch.cuda.Event(enable_timing=True)
     end_evt     = torch.cuda.Event(enable_timing=True)
@@ -629,7 +663,7 @@ if __name__ == '__main__':
     print('Class c1')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c1', batch_size=batch_size)
     end_evt.record()
     
     torch.cuda.synchronize()    # wait until all GPU operations are done
@@ -637,19 +671,20 @@ if __name__ == '__main__':
     print(f'Total elpsed time : {total:.3f} s')
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     
-    # # c3
+    # c3
     print('Class c3')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c3', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N2, target_class='c3', batch_size=batch_size)
     end_evt.record()
+
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     # c2
     print('Class c2')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=5000, target_class='c2', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N2, target_class='c2', batch_size=batch_size)
     end_evt.record()
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
@@ -658,7 +693,7 @@ if __name__ == '__main__':
     print('Class c4')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=5000, target_class='c4', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c4', batch_size=batch_size)
     end_evt.record()
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
