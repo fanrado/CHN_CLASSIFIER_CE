@@ -34,11 +34,11 @@ class LabelData:
         if not generate_new_data:
             print('Current file : ', self.filename)
             self.source_data = self.__read_sourcedata(filename=self.filename, sep=sep)
-            self.Fig_output_path = '/'.join([self.root_path, filename.split('.')[0]+'_fig'])
-            try:
-                os.mkdir(self.Fig_output_path)
-            except:
-                pass
+            # self.Fig_output_path = '/'.join([self.root_path, filename.split('.')[0]+'_fig'])
+            # try:
+            #     os.mkdir(self.Fig_output_path)
+            # except:
+            #     pass
         else:
             self.source_data = self.__read_all_data(sep=sep)
             self.all_columns = [c for c in self.source_data.columns if 'class' not in c]
@@ -143,19 +143,26 @@ class LabelData:
             # find peak in ideal response
             pos_peak = np.argmax(R_ideal)
             # considering the peak time is 2us and each tick corresponds to 0.512 us, there are at most 5 ticks from the peak to the pedestal.
-            xtail = x[pos_peak+6:]
+            # xtail = x[pos_peak+6:]
+            # # find intersection
+            # x1 = x[pos_peak+6:]
+            # y1 = R[pos_peak+6:]
+            # x2 = x[pos_peak+6:]
+            # y2 = R_ideal[pos_peak+6:]
+            xtail = x[pos_peak+4:]
             # find intersection
-            x1 = x[pos_peak+6:]
-            y1 = R[pos_peak+6:]
-            x2 = x[pos_peak+6:]
-            y2 = R_ideal[pos_peak+6:]
+            x1 = x[pos_peak+4:]
+            y1 = R[pos_peak+4:]
+            x2 = x[pos_peak+4:]
+            y2 = R_ideal[pos_peak+4:]
             try:
                 x_intersect, y_intersect = self.find_intersection(x1,y1,x2, y2)
             except:
                 continue
             # select data between pos_peak+6 and x_intersect
             # mask = x1 <= x_intersect
-            mask = x1 <= x[pos_peak+50] # what if not finding the intersection ==> fixing the integration domain
+            # mask = x1 <= x[pos_peak+50] # what if not finding the intersection ==> fixing the integration domain
+            mask = x1 <= x[70-(pos_peak+4)-1] # what if not finding the intersection ==> fixing the integration domain
             x_selected = x1[mask]
             R_selected = y1[mask]
             R_ideal_selected = y2[mask]
@@ -417,7 +424,7 @@ class LabelData:
                 # break
             else:
                 data = pd.concat([data, tmpdata], axis=0)
-            # if i==2:
+            # if i==10:
             #     break
 
         return data
@@ -449,7 +456,6 @@ class LabelData:
                 continue
             labelledData = self.classifyResponse(integrals_R=integrals_R_selected, max_deviations=max_deviations, source_data=new_df,
                                                  plotHistClasses=False, plotComparisonResponses=False)
-            
             if (Total_Number_c < N_samples) and (labelledData['class'].iloc[0]==target_class):
                 if Total_Number_c==0:
                     c_df = labelledData
@@ -472,7 +478,7 @@ class LabelData:
         # build time‐grid: [B,L]
         t0 = pars[:,0].unsqueeze(1)   # [B,1]
         xs = t0 + torch.arange(L, device=self.device).view(1, L)
-
+        
         # compute in batch
         R      = response_torch(xs, pars)              # [B,L]
         R_ideal= response_legacy_torch(xs, pars)       # [B,L]
@@ -480,29 +486,15 @@ class LabelData:
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
         
-        # # DEBUG
-        # # print(pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50))
-        # idx_base = pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50)
-        # print(idx_base)
-        # # sys.exit()
-        # R_tail       = R.gather(1, idx_base)      # [B,50]
-        # R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
-        # # print(R_tail.cpu().numpy().flatten())
-        # # print(R_ideal.cpu().numpy().flatten())
-        # print(R.cpu().numpy().flatten())
-        # plt.figure()
-        # # plt.plot(xs.cpu().numpy().flatten(), R.cpu().numpy().flatten())
-        # plt.plot(R.cpu().numpy().flatten())
-        # # plt.plot(R_tail.cpu().numpy().flatten(), label='tail')
-        # # plt.xlim([-10, 50])
-        # plt.legend()
-        # plt.savefig('OUTPUT/debug.png')
-        # sys.exit()
         # gather fixed‐length tail 50
         try:
-            idx_base = pos_peak.unsqueeze(1) + torch.arange(6, 56, device=self.device).view(1,50)
-            R_tail       = R.gather(1, idx_base)      # [B,50]
-            R_ideal_tail = R_ideal.gather(1, idx_base)     # [B,50]
+            idx_base = None
+            try:
+                idx_base = pos_peak.unsqueeze(1) + torch.arange(4, 44, device=self.device).view(1,40)
+            except:
+                return 1e8, 1e8
+            R_tail       = R.gather(-1, idx_base)      # [B,50]
+            R_ideal_tail = R_ideal.gather(-1, idx_base)     # [B,50]
 
             # integral via trapezoid
             ints = ((R_tail[:,:-1] + R_tail[:,1:])*0.5).sum(dim=1)  # [B]
@@ -531,23 +523,16 @@ class LabelData:
             data = self.source_data[self.all_columns][self.source_data['class']=='c3']
         elif target_class=='c4':
             data = self.source_data[self.all_columns][self.source_data['class']=='c4']
-        # else:
-        #     data = self.source_data[self.all_columns]
-        # # data = self.source_data[self.all_columns]
-        # Determine the ranges of the parameters to be generated
-        t_mean, t_std = np.mean(data['t']), np.std(data['t'])
-        A_0_mean, A_0_std = np.mean(data['A_0']), np.std(data['A_0'])
-        t_p_mean, t_p_std = np.mean(data['t_p']), np.std(data['t_p'])
-        k3_mean, k3_std = np.mean(data['k3']), np.std(data['k3'])
-        k4_mean, k4_std = np.mean(data['k4']), np.std(data['k4'])
-        k5_mean, k5_std = np.mean(data['k5']), np.std(data['k5'])
-        k6_mean, k6_std = np.mean(data['k6']), np.std(data['k6'])
-        integral_mean, integral_std = np.mean(data['integral_R']), np.std(data['integral_R'])
-        maxdev_mean, maxdev_std = np.mean(data['max_deviation']), np.std(data['max_deviation'])
+        # # else:
+        # #     data = self.source_data[self.all_columns]
+        # data = self.source_data[self.all_columns]
 
         data = data.dropna(axis=0)
         kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
-        # kde = gaussian_kde(data.to_numpy().T, bw_method=0.2)
+        # kde = gaussian_kde(data.to_numpy().T)
+        # kde_factor = kde.factor * 0.1
+        # kde.set_bandwidth(kde_factor)
+
         dim = len(self.all_columns)
 
         all_df = pd.DataFrame()
@@ -561,20 +546,22 @@ class LabelData:
             if dim!=new_params.shape[1]:
                 continue
             
-            pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
             # print(pars_t.cpu().numpy() == new_params)
             # print(new_params)
             # sys.exit()
+            ints, devs = 0, 0
             try:
                 # 2) compute ints & devs in one GPU call
+                pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
                 ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
             except:
                 # print(pars_t.cpu().numpy())
                 continue
             # print(ints, devs)
-
+            # print('HERE')
             # 3) filter too‐large tails
-            mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
+            # mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
+            mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 200)
             if not mask1.any():
                 continue
             # 4) classify these masked ones on CPU *without* looping in python
@@ -584,22 +571,22 @@ class LabelData:
             tmpdf['max_deviation']  = devs[mask1]
             
             # MASKS
-            mask_t = (tmpdf['t']>= (t_mean-2.5*t_std)) & (tmpdf['t']<=(t_mean+2.5*t_std))
-            # mask_A_0 = (tmpdf['A_0']>= (A_0_mean-2.5*A_0_std)) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
-            mask_A_0 = (tmpdf['A_0']> 0) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
-            mask_t_p = (tmpdf['t_p']>= (t_p_mean-2.5*t_p_std)) & (tmpdf['t_p']<=(t_p_mean+2.5*t_p_std))
-            # mask_k3 = (tmpdf['k3']>= (k3_mean-2.5*k3_std)) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
-            # mask_k4 = (tmpdf['k4']>= (k4_mean-2.5*k4_std)) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
-            # mask_k5 = (tmpdf['k5']>= (k5_mean-2.5*k5_std)) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
-            # mask_k6 = (tmpdf['k6']>= (k6_mean-2.5*k6_std)) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
-            mask_k3 = (tmpdf['k3']>= 0) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
-            mask_k4 = (tmpdf['k4']>= 0) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
-            mask_k5 = (tmpdf['k5']>= 0) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
-            mask_k6 = (tmpdf['k6']>= 0) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
-            mask_integral = (tmpdf['integral_R']>= (integral_mean-2.5*integral_std)) & (tmpdf['integral_R']<=(integral_mean+2.5*integral_std))
-            mask_max_dev = (tmpdf['max_deviation']>= (maxdev_mean-2.5*maxdev_std)) & (tmpdf['max_deviation']<=(maxdev_mean+2.5*maxdev_std))
-            df = tmpdf[mask_t & mask_A_0 & mask_t_p & mask_k3 & mask_k4 & mask_k5 & mask_k6 & mask_integral & mask_max_dev].copy()
-
+            # mask_t = (tmpdf['t']>= (t_mean-2.5*t_std)) & (tmpdf['t']<=(t_mean+2.5*t_std))
+            # # mask_A_0 = (tmpdf['A_0']>= (A_0_mean-2.5*A_0_std)) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
+            # mask_A_0 = (tmpdf['A_0']> 0) & (tmpdf['A_0']<=(A_0_mean+2.5*A_0_std))
+            # mask_t_p = (tmpdf['t_p']>= (t_p_mean-2.5*t_p_std)) & (tmpdf['t_p']<=(t_p_mean+2.5*t_p_std))
+            # # mask_k3 = (tmpdf['k3']>= (k3_mean-2.5*k3_std)) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
+            # # mask_k4 = (tmpdf['k4']>= (k4_mean-2.5*k4_std)) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
+            # # mask_k5 = (tmpdf['k5']>= (k5_mean-2.5*k5_std)) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
+            # # mask_k6 = (tmpdf['k6']>= (k6_mean-2.5*k6_std)) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
+            # mask_k3 = (tmpdf['k3']>= 0) & (tmpdf['k3']<=(k3_mean+2.5*k3_std))
+            # mask_k4 = (tmpdf['k4']>= 0) & (tmpdf['k4']<=(k4_mean+2.5*k4_std))
+            # mask_k5 = (tmpdf['k5']>= 0) & (tmpdf['k5']<=(k5_mean+2.5*k5_std))
+            # mask_k6 = (tmpdf['k6']>= 0) & (tmpdf['k6']<=(k6_mean+2.5*k6_std))
+            # mask_integral = (tmpdf['integral_R']>= (integral_mean-2.5*integral_std)) & (tmpdf['integral_R']<=(integral_mean+2.5*integral_std))
+            # mask_max_dev = (tmpdf['max_deviation']>= (maxdev_mean-2.5*maxdev_std)) & (tmpdf['max_deviation']<=(maxdev_mean+2.5*maxdev_std))
+            # df = tmpdf[mask_t & mask_A_0 & mask_t_p & mask_k3 & mask_k4 & mask_k5 & mask_k6 & mask_integral & mask_max_dev].copy()
+            df = tmpdf.copy()
             # vectorized class assignment:
             df['class'] = np.where(
             (df['integral_R']<0)&(df['max_deviation']<0), 'c1',
@@ -618,26 +605,28 @@ class LabelData:
             # all_rows.append(df[sel])
             del pars_t
 
+        # ==> This is not a problem in the calculation of the integral, max dev, and labeling <==
         # all_df = pd.concat(all_rows, axis=0)
         # drop unnecessary column
         cols_to_drop = [col for col in all_df.columns if 'Unnamed' in col]
         all_df.drop(columns=cols_to_drop, inplace=True)
         all_df['#Ch.#'] = all_df['#Ch.#'].astype('int32').abs()
         # save final
-        all_df.to_csv(f"{self.data_output_path}/generate_new_samples_{target_class}.csv", index=False)
+        # all_df.to_csv(f"{self.data_output_path}/generate_new_samples_{target_class}.csv", index=False)
+        all_df.to_csv(f"{self.data_output_path}/generate_new_samples_{target_class}.txt", sep='\t', index=False)
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
     # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
     # labeldata_obj.runLabelling()
     # list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results') if '.txt' in f]
-    # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
+    # # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
     # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
     # for f in list_file_source:
     #     labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
     #     labeldata_obj.runLabelling()
-    ##
-    # ## GENERATE NEW DATASET
+    # ##
+    ## GENERATE NEW DATASET
     # list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
     # labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     # labeldata_obj.GenerateNewSamples(N_samples=1000, target_class=['c1', 'c3', 'c4'])
@@ -647,9 +636,9 @@ if __name__ == '__main__':
     # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
 
     ## GENERATE NEW DATASET using GPU
-    batch_size = 1
-    N1 = 1000
-    N2 = 1000
+    batch_size = 4096*10
+    N1 = 5000
+    # N2 = 40000
     # related to GPU kernel time
     start_evt   = torch.cuda.Event(enable_timing=True)
     end_evt     = torch.cuda.Event(enable_timing=True)
@@ -659,7 +648,6 @@ if __name__ == '__main__':
     list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
     # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_cpu/generatedSamples') if ('.csv' in f)]
     labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
-    # labeldata_obj = LabelData(root_path='data/labelledData/labelledData_cpu/generatedSamples', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     print('Class c1')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
@@ -675,7 +663,7 @@ if __name__ == '__main__':
     print('Class c3')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=N2, target_class='c3', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c3', batch_size=batch_size)
     end_evt.record()
 
     torch.cuda.synchronize()    # wait until all GPU operations are done
@@ -684,7 +672,7 @@ if __name__ == '__main__':
     print('Class c2')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=N2, target_class='c2', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c2', batch_size=batch_size)
     end_evt.record()
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
