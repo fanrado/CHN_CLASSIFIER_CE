@@ -87,13 +87,13 @@ def train_valid_test(original_df=None, cols_input=None, cols_output=None, cols_o
     y = original_df[cols_output]
     X_temp, X_test, y_temp, y_test = train_test_split(
         X, y,
-        test_size=0.1,
+        test_size=0.2,
         random_state=42
     )
 
     X_train, X_val, y_train, y_val = train_test_split(
         X_temp, y_temp,
-        test_size=0.2,
+        test_size=0.3,
         random_state=42
     )
 
