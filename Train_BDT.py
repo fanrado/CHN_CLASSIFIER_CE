@@ -97,10 +97,11 @@ class TrainBDT:
             # 'min_child_weight' : [3, 5, 7],
             # 'subsample' : [1.0],
             # 'colsample_bytree' : [0.8],
-            'max_depth': [15, 20],
-            'learning_rate': [0.5, 0.45, 0.4, 0.3],
+            'max_depth': [15,25],
+            # 'learning_rate': [0.5, 0.45, 0.4, 0.3],
+            'learning_rate': [0.4,0.45, 0.3],
             # 'n_estimators': [50, 100, 150],
-            'min_child_weight' : [15],#, 20],
+            'min_child_weight' : [15, 25],#, 20],
             'subsample': [0.7, 0.9, 1.0],
             'colsample_bytree': [0.7, 0.9, 1.0]
         }
@@ -133,7 +134,7 @@ class TrainBDT:
         lr_callback = LearningRateDecay(
             initial_lr=initial_lr,
             decay_factor=0.75,  # 5% decay
-            decay_rounds=20     # every 50 rounds
+            decay_rounds=50     # every 50 rounds
         )
 
         xgb_regressor = xgb.train(params=best_params_regressor,
@@ -547,7 +548,7 @@ def main():
             'figure.titlesize': 20
         })
     
-    root_path = 'data/labelledData/labelledData/'
+    root_path = 'data/labelledData/labelledData'
     # root_path = 'data/labelledData/labelledData_cpu/generatedSamples'
     # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT/synthetic'
@@ -556,6 +557,7 @@ def main():
     except:
         pass
     list_files = [f for f in os.listdir(root_path) if ('.csv' in f) and ('kde' not in f)]
+    # list_files = [f for f in os.listdir(root_path) if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
     # xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=[f for f in os.listdir(root_path) if ('.csv' in f) and ('30413' in f)],
     #                    output_path=output_path)
     xgb_obj = TrainBDT(source_data_path=root_path, list_training_files=list_files,
@@ -581,10 +583,10 @@ def main():
     xgb_obj.test_classifier(xgb_classifier_model=classifier_model)
     xgb_obj.outputRegressor2Classifier(listfilenames=[f for f in os.listdir(output_path) if 'predicted.csv' in f])
     ##
-    ## TESTING AFTER THE MODELS ARE TRAINED
-    TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
-    TestRegressor(path_to_model='OUTPUT/synthetic/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='max_deviation')
-    TestClassifier(path_to_model='OUTPUT/synthetic/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
-                   output_path='OUTPUT/synthetic/TestOnData')
+    # ## TESTING AFTER THE MODELS ARE TRAINED
+    # TestRegressor(path_to_model='OUTPUT/synthetic/integral_R_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='integral_R')
+    # TestRegressor(path_to_model='OUTPUT/synthetic/max_deviation_model.json', path_to_data='data/labelledData', datakey='fit_results', colsInput=cols_input, isValidation=True, output_path='OUTPUT/synthetic/TestOnData', item_to_predict='max_deviation')
+    # TestClassifier(path_to_model='OUTPUT/synthetic/classifier_resp_model.json', path_to_data='OUTPUT/synthetic/TestOnData', datakey='predicted', colsInput=['integral_R', 'max_deviation'], trueInput=False,
+    #                output_path='OUTPUT/synthetic/TestOnData')
 if __name__=='__main__':
     main()
