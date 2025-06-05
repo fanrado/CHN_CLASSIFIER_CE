@@ -145,6 +145,7 @@ class BDT_Classifier:
         self.train_df = self.read_data(path_to_data=f'{path_to_data}/train_valid')
         self.test_df = self.read_data(path_to_data=f'{path_to_data}/test')
         self.classifier_model = self.model()
+        self.iter_training = 0
 
     def model(self):
         classifier_model = XGBClassifier()
@@ -207,12 +208,13 @@ class BDT_Classifier:
         accuracy = ((test_df['class']==test_df['prediction']).mean())*100
         print(f'Accuracy = {accuracy:.2f}%')
         # save the model if the accuracy >= 99.98%
-        if accuracy >= 99.89:
+        if (accuracy >= 99.85) or (self.iter_training >= 5):
             self.classifier_model.save_model(f'{self.output_path}/classifier_bdt_model.json')
         else:
             print('Accuracy not good enough to be saved.')
             params = self.tune_hyperamaters()
             self.train(params=params)
+            self.iter_training += 1
 
 class BDT_Regressor:
     """
@@ -268,7 +270,7 @@ class BDT_Regressor:
         }
         model = XGBRegressor()
         rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=3,
-                                     n_iter=10, cv=4, verbose=True)
+                                     n_iter=50, cv=3, verbose=True)
         regressor = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df[self.output_columns])
         print('Best parameters : ', regressor.best_params_)
         return regressor.best_params_
