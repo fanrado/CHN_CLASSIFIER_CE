@@ -97,7 +97,7 @@ class TrainBDT:
             # 'min_child_weight' : [3, 5, 7],
             # 'subsample' : [1.0],
             # 'colsample_bytree' : [0.8],
-            'max_depth': [15, 30],#, 20],
+            'max_depth': [15],#, 20],
             'learning_rate': [0.4, 0.3],
             # 'n_estimators': [50, 100, 150],
             'min_child_weight' : [15],#, 20],
@@ -547,7 +547,8 @@ def main():
             'figure.titlesize': 20
         })
     
-    root_path = 'data/labelledData/labelledData_cpu/generatedSamples'
+    # root_path = 'data/labelledData/labelledData_cpu/generatedSamples'
+    root_path = 'data/labelledData/labelledData'
     # root_path = 'data/labelledData_after_March22_2025'
     output_path = 'OUTPUT/synthetic'
     try:
