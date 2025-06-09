@@ -28,7 +28,8 @@ def split_train_test_dataset(path_to_data=None, frac_test=0.2):
         except:
             pass
 
-    list_data = [f for f in os.listdir(path_to_data) if ('fit_results' in f) and ('.csv' in f)]
+    # list_data = [f for f in os.listdir(path_to_data) if ('fit_results' in f) and ('.csv' in f)]
+    list_data = [f for f in os.listdir(path_to_data) if '.csv' in f]
     # read files and concatenate in one dataframe
     df = pd.DataFrame()
     for i, f in enumerate(list_data):
