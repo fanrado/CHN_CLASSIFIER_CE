@@ -539,7 +539,8 @@ class LabelData:
         L = 70
         # build time‐grid: [B,L]
         t0 = pars[:,0].unsqueeze(1)   # [B,1]
-        xs = t0 + torch.arange(L, device=self.device).view(1, L)
+        # xs = t0 + torch.arange(L, device=self.device).view(1, L)
+        xs = t0 + torch.linspace(0, 70, L, device=self.device).view(1, L)
         
         # compute in batch
         R      = response_torch(xs, pars)              # [B,L]
@@ -594,10 +595,14 @@ class LabelData:
 
         data = data.dropna(axis=0)
         # kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
-        kde = gaussian_kde(data.to_numpy().T, bw_method=1e-20)
+        kde = gaussian_kde(data.to_numpy().T, bw_method=1e-2)
+        # kde = gaussian_kde(data.to_numpy().T, bw_method=1e-20)
         # kde = gaussian_kde(data.to_numpy().T)
         # kde_factor = kde.factor * 0.1
         # kde.set_bandwidth(kde_factor)
+
+        # Find the indices of response_params within all_columns
+        resp_indices = [self.all_columns.index(col) for col in self.response_params]
 
         dim = len(self.all_columns)
 
@@ -618,7 +623,9 @@ class LabelData:
             ints, devs = 0, 0
             try:
                 # 2) compute ints & devs in one GPU call
-                pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device)
+                # pars_t = torch.tensor(new_params, dtype=torch.float32, device=self.device) # THIS IS WRONG: in this line, all columns are stored in pars_t. However we only need those corresponding to self.response_params
+                new_params_for_response = new_params[:, resp_indices] #
+                pars_t = torch.tensor(new_params_for_response, dtype=torch.float32, device=self.device) # THIS IS THE RIGHT WAY TO DO IT
                 ints, devs = self.calculate_Integral_MaxDev_gpu_batch(pars_t)       # each shape [B]
                 # print(ints)
             except:
@@ -628,7 +635,7 @@ class LabelData:
             # print('HERE')
             # 3) filter too‐large tails
             # mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
-            mask1 = (np.abs(ints) <= 1e6) & (np.abs(devs) <= 1e6)
+            mask1 = (np.abs(ints) <= 35000) & (np.abs(devs) <= 3000)
             if not mask1.any():
                 continue
             # 4) classify these masked ones on CPU *without* looping in python
@@ -674,14 +681,14 @@ if __name__ == '__main__':
     # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
     # labeldata_obj.runLabelling()
     # list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results') if '.txt' in f]
-    list_file_source = [f for f in os.listdir('data/labelledData/labelledData_gpu') if ('.csv' in f) and ('batchSize' not in f)]
-    print(list_file_source)
-    # # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
-    # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
-    for f in list_file_source:
-        # labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
-        labeldata_obj = LabelData(root_path='data/labelledData/labelledData_gpu', filename=f, fixHeader=False, sep=',')
-        labeldata_obj.runLabelling()
+    # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_gpu') if ('.csv' in f) and ('batchSize' not in f)]
+    # print(list_file_source)
+    # # # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
+    # # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
+    # for f in list_file_source:
+    #     # labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
+    #     labeldata_obj = LabelData(root_path='data/labelledData/labelledData_gpu', filename=f, fixHeader=False, sep=',')
+    #     labeldata_obj.runLabelling()
     ##
     # # GENERATE NEW DATASET
     # list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f)]
@@ -692,55 +699,55 @@ if __name__ == '__main__':
     # # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class=['c3'])
     # # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
 
-    # ## GENERATE NEW DATASET using GPU
-    # # batch_size = 5000
+    ## GENERATE NEW DATASET using GPU
     # batch_size = 5000
-    # # N1 = 143331
-    # N1 = 10000
-    # # N2 = 40000
-    # # related to GPU kernel time
-    # start_evt   = torch.cuda.Event(enable_timing=True)
-    # end_evt     = torch.cuda.Event(enable_timing=True)
-    # # start is for the total time CPU + GPU
-    # start = time.perf_counter()
-    # torch.cuda.synchronize()    # drain any prior work
-    # list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
-    # # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_cpu/generatedSamples') if ('.csv' in f)]
-    # labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
-    # print('Class c1')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c1', batch_size=batch_size)
-    # end_evt.record()
+    batch_size = 5000*10
+    # N1 = 143331
+    N1 = 200000
+    # N2 = 40000
+    # related to GPU kernel time
+    start_evt   = torch.cuda.Event(enable_timing=True)
+    end_evt     = torch.cuda.Event(enable_timing=True)
+    # start is for the total time CPU + GPU
+    start = time.perf_counter()
+    torch.cuda.synchronize()    # drain any prior work
+    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
+    # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_cpu/generatedSamples') if ('.csv' in f)]
+    labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
+    print('Class c1')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c1', batch_size=batch_size)
+    end_evt.record()
     
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # total = time.perf_counter() - start
-    # print(f'Total elpsed time : {total:.3f} s')
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    total = time.perf_counter() - start
+    print(f'Total elpsed time : {total:.3f} s')
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
     
-    # # c3
-    # print('Class c3')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c3', batch_size=batch_size)
-    # end_evt.record()
+    # c3
+    print('Class c3')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c3', batch_size=batch_size)
+    end_evt.record()
 
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
-    # # c2
-    # print('Class c2')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c2', batch_size=batch_size)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # c2
+    print('Class c2')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c2', batch_size=batch_size)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
 
-    # # c4
-    # print('Class c4')
-    # start_evt.record()
-    # # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    # labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c4', batch_size=batch_size)
-    # end_evt.record()
-    # torch.cuda.synchronize()    # wait until all GPU operations are done
-    # print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
+    # c4
+    print('Class c4')
+    start_evt.record()
+    # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=N1, target_class='c4', batch_size=batch_size)
+    end_evt.record()
+    torch.cuda.synchronize()    # wait until all GPU operations are done
+    print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
