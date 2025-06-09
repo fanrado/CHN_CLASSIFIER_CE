@@ -703,7 +703,7 @@ if __name__ == '__main__':
     # batch_size = 5000
     batch_size = 5000*10
     # N1 = 143331
-    N1 = 200000
+    N1 = 50000
     # N2 = 40000
     # related to GPU kernel time
     start_evt   = torch.cuda.Event(enable_timing=True)
