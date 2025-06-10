@@ -641,30 +641,55 @@ class TestPreclassifier:
         return output_df
 
 if __name__=='__main__':
-    # # Generating training dataset
-    # # class c1
-    # # print('Generating wf for class c1...')
-    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
-    # #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # # sim_wf_obj.run()
+    # Generating training dataset
+    path_to_simdata = 'data/labelledData/labelledData/'
+    # class c1
+    print('Generating wf for class c1...')
+    filename = 'generate_new_samples_c1.csv'
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+                          output_path=f'{path_to_simdata}/WF_sim/')
+    sim_wf_obj.run()
 
-    # # # class c2
-    # # print('Generating wf for class c2...')
-    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c2_labelled_tails.csv',
-    # #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # # sim_wf_obj.run()
+    # # class c2
+    # print('Generating wf for class c2...')
+    # filename = 'generate_new_samples_c2.csv'
+    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+    #                       output_path=f'{path_to_simdata}/WF_sim/')
+    # sim_wf_obj.run()
 
-    # # # class c3
-    # # print('Generating wf for class c3...')
-    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c3_labelled_tails.csv',
-    # #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # # sim_wf_obj.run()
+    # # class c3
+    # print('Generating wf for class c3...')
+    # filename = 'generate_new_samples_c3.csv'
+    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+    #                       output_path=f'{path_to_simdata}/WF_sim/')
+    # sim_wf_obj.run()
 
-    # # # class c4
-    # # print('Generating wf for class c4...')
-    # # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c4_labelled_tails.csv',
-    # #                       output_path='data/labelledData/labelledData/WF_sim/')
-    # # sim_wf_obj.run()
+    # # class c4
+    # print('Generating wf for class c4...')
+    # filename = 'generate_new_samples_c4.csv'
+    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+    #                       output_path=f'{path_to_simdata}/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c2
+    # print('Generating wf for class c2...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c2_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c3
+    # print('Generating wf for class c3...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c3_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
+
+    # # class c4
+    # print('Generating wf for class c4...')
+    # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c4_labelled_tails.csv',
+    #                       output_path='data/labelledData/labelledData/WF_sim/')
+    # sim_wf_obj.run()
 
     # # Training the regression models to predict the maximum deviation and integral of the tails
     # target_columns = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
@@ -681,26 +706,26 @@ if __name__=='__main__':
     # # compare truth with prediction
     # compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
 
-    ## TEST PRE-CLASSIFIER
-    test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
-    hist_test = test_.getCHN_resp(chn=0)
-    h = hist_test[[f'p{i}' for i in range(70)]].iloc[0]
-    pred_par = test_.predict_fitParams(path_pred_fitParams_model='OUTPUT/Preclassifier/pred_fitParams_model.json', chn_resp_hist=hist_test)
-    pred_integralR = test_.predict_integral_tailR(path_pred_integralR_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
-                                 fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
-    pred_max_dev = test_.predict_max_dev_tail(path_pred_max_deviation_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json',
-                                              fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
-    test_.predict_class(path_classifier_int_maxdev_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json',
-                        integral_R=pred_integralR, max_deviation=pred_max_dev)
-    # print(pred_par)
-    params = pred_par.iloc[0].values
-    x = np.linspace(params[0], params[0]+70, 70)
-    R = response(x=x, par=params)
-    R_ideal = response_legacy(x=x, par=params)
-    plt.figure()
-    plt.stairs(h, label='data')
-    plt.plot(R, label='real')
-    plt.plot(R_ideal, label='ideal')
-    plt.title(f'integral tail = {pred_integralR}\n max deviation = {pred_max_dev}')
-    plt.legend()
-    plt.show()
+    # ## TEST PRE-CLASSIFIER
+    # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
+    # hist_test = test_.getCHN_resp(chn=0)
+    # h = hist_test[[f'p{i}' for i in range(70)]].iloc[0]
+    # pred_par = test_.predict_fitParams(path_pred_fitParams_model='OUTPUT/Preclassifier/pred_fitParams_model.json', chn_resp_hist=hist_test)
+    # pred_integralR = test_.predict_integral_tailR(path_pred_integralR_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
+    #                              fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
+    # pred_max_dev = test_.predict_max_dev_tail(path_pred_max_deviation_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json',
+    #                                           fit_params_df=pred_par[['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']])
+    # test_.predict_class(path_classifier_int_maxdev_model='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json',
+    #                     integral_R=pred_integralR, max_deviation=pred_max_dev)
+    # # print(pred_par)
+    # params = pred_par.iloc[0].values
+    # x = np.linspace(params[0], params[0]+70, 70)
+    # R = response(x=x, par=params)
+    # R_ideal = response_legacy(x=x, par=params)
+    # plt.figure()
+    # plt.stairs(h, label='data')
+    # plt.plot(R, label='real')
+    # plt.plot(R_ideal, label='ideal')
+    # plt.title(f'integral tail = {pred_integralR}\n max deviation = {pred_max_dev}')
+    # plt.legend()
+    # plt.show()
