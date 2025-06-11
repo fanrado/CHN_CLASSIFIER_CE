@@ -29,7 +29,8 @@ class Sim_waveform:
         self.sim_data = pd.DataFrame()
         if self.path_to_sim is not None:
             self.sim_data = self.read_csv_sim()
-        self.response_params = ['#Ch.#', 't', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        # self.response_params = ['#Ch.#', 't', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
 
     def read_csv_sim(self):
         tmpdata = pd.read_csv(self.path_to_sim)
@@ -54,12 +55,35 @@ class Sim_waveform:
             params = list(self.sim_data[self.response_params].iloc[isample])
             R = self.__generate_1wf(params=params)
             dict_params = dict(zip(self.response_params, params))
+            dict_params['#Ch.#'] = self.sim_data['#Ch.#'].iloc[isample]
             dict_params['class'] = self.sim_data['class'].iloc[isample]
             dict_params['wf'] = R
             dict_params['integral_R'] = self.sim_data['integral_R'].iloc[isample]
             dict_params['max_deviation'] = self.sim_data['max_deviation'].iloc[isample]
             np.savez(f'{self.output_path}/wf_{key_name}_{isample}.npz', **dict_params)
 
+    def data2npy(self):
+        """
+            Save the self.sim_data along with the waveform datapoints to a .npy file.
+        """
+        enriched_data = []
+        N_samples = self.sim_data.shape[0]
+        N_samples = 50000
+        for isample in range(N_samples):
+            params = list(self.sim_data[self.response_params].iloc[isample])
+            R = self.__generate_1wf(params=params)
+            dict_params = dict(zip(self.response_params, params))
+            dict_params['#Ch.#'] = self.sim_data['#Ch.#'].iloc[isample]
+            dict_params['class'] = self.sim_data['class'].iloc[isample]
+            dict_params['wf'] = R
+            dict_params['integral_R'] = self.sim_data['integral_R'].iloc[isample]
+            dict_params['max_deviation'] = self.sim_data['max_deviation'].iloc[isample]
+            enriched_data.append(dict_params)
+        # save the enriched_data to a .npy file
+        output_file = self.path_to_sim.split('/')[-1].split('.')[0]
+        output_file = f'{self.output_path}/{output_file}.npy'
+        np.save(output_file, enriched_data)
+        print(f'Data saved to {output_file}')
 
 class Load_chunk_dset:
     '''
@@ -281,7 +305,7 @@ class PreClassifier_BDT:
         self.path_to_data = path_to_data
         self.output_path = output_path
         self.target_columns = target_columns
-        self.chunk_size = 5000
+        self.chunk_size = 10000
         self.list_dset = []
         self.list_test = []
         self.Ntest = Ntest
@@ -338,9 +362,9 @@ class PreClassifier_BDT:
         best_result = randomSearchCV(
             train_data_dict=[X, y],  # Replace with your training data
             param_distributions=param_distributions,
-            n_iter=10,
+            n_iter=4,
             scoring='neg_mean_squared_error',
-            cv=5
+            cv=2
         )
 
         print("Best parameters:", best_result['best_params'])
@@ -643,35 +667,36 @@ class TestPreclassifier:
 if __name__=='__main__':
     # Generating training dataset
     path_to_simdata = 'data/labelledData/labelledData/'
+    path_to_simdata = 'data/labelledData/labelledData_gpuSamples_alot'
     # class c1
     print('Generating wf for class c1...')
     filename = 'generate_new_samples_c1.csv'
     # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
     #                       output_path='data/labelledData/labelledData/WF_sim/')
     sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
-                          output_path=f'{path_to_simdata}/WF_sim/')
-    sim_wf_obj.run()
+                          output_path=f'{path_to_simdata}/npy/')
+    sim_wf_obj.data2npy()
 
-    # # class c2
-    # print('Generating wf for class c2...')
-    # filename = 'generate_new_samples_c2.csv'
-    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
-    #                       output_path=f'{path_to_simdata}/WF_sim/')
-    # sim_wf_obj.run()
+    # class c2
+    print('Generating wf for class c2...')
+    filename = 'generate_new_samples_c2.csv'
+    sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+                          output_path=f'{path_to_simdata}/npy/')
+    sim_wf_obj.data2npy()
 
-    # # class c3
-    # print('Generating wf for class c3...')
-    # filename = 'generate_new_samples_c3.csv'
-    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
-    #                       output_path=f'{path_to_simdata}/WF_sim/')
-    # sim_wf_obj.run()
+    # class c3
+    print('Generating wf for class c3...')
+    filename = 'generate_new_samples_c3.csv'
+    sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+                          output_path=f'{path_to_simdata}/npy/')
+    sim_wf_obj.data2npy()
 
-    # # class c4
-    # print('Generating wf for class c4...')
-    # filename = 'generate_new_samples_c4.csv'
-    # sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
-    #                       output_path=f'{path_to_simdata}/WF_sim/')
-    # sim_wf_obj.run()
+    # class c4
+    print('Generating wf for class c4...')
+    filename = 'generate_new_samples_c4.csv'
+    sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
+                          output_path=f'{path_to_simdata}/npy/')
+    sim_wf_obj.data2npy()
 
     # # class c2
     # print('Generating wf for class c2...')
@@ -696,13 +721,13 @@ if __name__=='__main__':
     # # target_columns = ['class_c3']
     # # chunk_dset_obj = Load_chunk_dset(path_to_dset='data/labelledData/labelledData/WF_sim', chunk_size=5, target_columns=taget_columns)
     # # chunk_dset_obj.test()
-    # preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData_cpu/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=5000)
+    # preclassifier_obj = PreClassifier_BDT(path_to_data='data/labelledData/labelledData_gpuSamples_alot/WF_sim', output_path='OUTPUT/Preclassifier', target_columns=target_columns, Ntest=10000)
     # regressor_model = preclassifier_obj.Train_bdt(tasktype='regression')
     # #
     # # Test the regression model and compare the result with the truth
-    # test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/integral_R_model.json',
-    #                                         regressor_predMaxdev='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/max_deviation_model.json')
-    # preclassifier_obj.testClassification(classifier_model_path='OUTPUT/Kept_RESULTS/Classification_result_may26_GOOD/classifier_resp_model.json', pred_int_maxDev_df=test_df)
+    # test_df = preclassifier_obj.testRegressor(regressor_predFitParams=regressor_model, regressor_predIntegral='OUTPUT/synthetic/integral_R_model.json',
+    #                                         regressor_predMaxdev='OUTPUT/synthetic/max_deviation_model.json')
+    # preclassifier_obj.testClassification(classifier_model_path='OUTPUT/synthetic/classifier_resp_model.json', pred_int_maxDev_df=test_df)
     # # compare truth with prediction
     # compare_truth_pred(test_df=test_df, output_path='OUTPUT/Preclassifier')
 
