@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from xgboost import XGBRegressor, XGBClassifier
+import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from scipy.stats import randint, uniform
 from sklearn.metrics import confusion_matrix
@@ -175,7 +176,7 @@ class BDT_Classifier:
             'n_estimators': randint(10, 100),
             'max_depth': randint(3, 30),
             'max_leaves': randint(0, 30),
-            'learning_rate': uniform(0.5, 0.5),
+            'learning_rate': uniform(0.5, 0.2),
             'num_boost_round': randint(50, 300),
             'min_child_weight': randint(1, 10),
             'subsample': uniform(0.5, 0.5),
@@ -186,7 +187,7 @@ class BDT_Classifier:
             'device': ['cuda']
         }
         rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=3,
-                                     n_iter=10, cv=3, verbose=True)
+                                     n_iter=10, cv=2, verbose=True)
         classifier = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df['class'])
         print('Best parameters : ', classifier.best_params_)
         return classifier.best_params_
@@ -259,7 +260,7 @@ class BDT_Regressor:
             'n_estimators': randint(10, 100),
             'max_depth': randint(3, 30),
             'max_leaves': randint(0, 30),
-            'learning_rate': uniform(0.5, 0.5),
+            'learning_rate': uniform(0.5, 0.2),
             'num_boost_round': randint(50, 300),
             'min_child_weight': randint(1, 10),
             'subsample': uniform(0.5, 0.5),
@@ -271,7 +272,7 @@ class BDT_Regressor:
         }
         model = XGBRegressor()
         rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=3,
-                                     n_iter=50, cv=3, verbose=True)
+                                     n_iter=10, cv=2, verbose=True)
         regressor = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df[self.output_columns])
         print('Best parameters : ', regressor.best_params_)
         return regressor.best_params_
@@ -337,6 +338,77 @@ class BDT_Regressor:
         test_df = pd.concat([test_df, pred_df], axis=1, join='outer')
         # evaluate the classification power
         confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=self.output_path, figname='confusionMatrix_onOutRegressor.png')
+
+class Classifier:
+    def __init__(self, regressor_model=None, classifier_model=None, path_to_data=None, output_path=None):
+        self.regressor_model    = XGBRegressor()
+        self.regressor_model.load_model(regressor_model)
+        self.classifier_model   = XGBClassifier()
+        self.classifier_model.load_model(classifier_model)
+        self.path_to_data       = path_to_data
+        self.output_path        = output_path
+        self.data               = pd.DataFrame()
+        self.colsInput_regressor    = ['A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.colsOutput_regressor   = ['integral_R', 'max_deviation']
+        self.class_map = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
+        self.map_class = {v: k for k, v in self.class_map.items()} # numbers to classes
+    
+    def read_data(self, key_in_name='fit_results', file_ext='.csv', sep=','):
+        list_files = [f for f in os.listdir(self.path_to_data) if (key_in_name in f) and (file_ext in f)]
+        data_df = pd.DataFrame()
+        for i, f in enumerate(list_files):
+            tmp_df = pd.read_csv('/'.join([self.path_to_data, f]), sep=sep)
+            if i==0:
+                data_df = tmp_df.copy()
+            else:
+                data_df = pd.concat([data_df, tmp_df.copy()], axis=0)
+        return data_df
+
+    def predMetrics(self, data_df=None, plot2dcorr=False):
+        # Predict the integral of the tail and the maximum deviation between the tails of the ideal and real responses
+        predictions = self.regressor_model.predict(data_df[self.colsInput_regressor])
+        predictions_df = pd.DataFrame(predictions, columns=[self.colsOutput_regressor], index=data_df.index)
+        predictions_df.columns = [f'pred_{c}' for c in self.colsOutput_regressor]
+        data_with_pred_df = pd.concat([data_df, predictions_df], axis=1, join='outer')
+        if plot2dcorr:
+            if 'class' not in list(data_with_pred_df.columns):
+                print("Cannot generate the correlation plot. The data is not labeled.")
+                return data_with_pred_df
+            # 2d correlation plots for each class
+            corr2dplot(truth_df=data_with_pred_df[data_with_pred_df['class']=='c1'], pred_df=data_with_pred_df[data_with_pred_df['class']=='c1'],
+                    classname='c1', output_path=self.output_path)
+            corr2dplot(truth_df=data_with_pred_df[data_with_pred_df['class']=='c2'], pred_df=data_with_pred_df[data_with_pred_df['class']=='c2'],
+                    classname='c2', output_path=self.output_path)
+            corr2dplot(truth_df=data_with_pred_df[data_with_pred_df['class']=='c3'], pred_df=data_with_pred_df[data_with_pred_df['class']=='c3'],
+                    classname='c3', output_path=self.output_path)
+            corr2dplot(truth_df=data_with_pred_df[data_with_pred_df['class']=='c4'], pred_df=data_with_pred_df[data_with_pred_df['class']=='c4'],
+                    classname='c4', output_path=self.output_path)
+        return data_with_pred_df
+    
+    def classify_metrics(self, data_df=None, plotconfmatrix=False):
+        data_df.drop(columns=self.colsOutput_regressor, axis=1, inplace=True)
+        for c in self.colsOutput_regressor:
+            data_df[c] = data_df[f'pred_{c}']
+            data_df.drop(columns=f'pred_{c}', axis=1, inplace=True)
+        predictions = self.classifier_model.predict(data_df[self.colsOutput_regressor])
+        pred_df = pd.DataFrame(predictions, columns=['pred_class'], index=data_df.index)
+        pred_df['pred_class'] = pred_df['pred_class'].apply(lambda x: self.map_class[x])
+        test_df = pd.concat([data_df, pred_df], axis=1, join='outer')
+        if plotconfmatrix:
+            # evaluate the classification power
+            confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=self.output_path, figname='confusionMatrix_onOutRegressor.png')
+        return test_df
+    
+    def run_classification(self, info_data_dict={
+                                                    'key_in_name'   : 'fit_results',
+                                                    'file_ext'      : '.csv',
+                                                    'sep'           : ','
+                                                },
+                                plot2dcorr=False, plotconfmatrix=False):
+        data_df = self.read_data(key_in_name=info_data_dict['key_in_name'], file_ext=info_data_dict['file_ext'], sep=info_data_dict['sep'])
+        predicted_metrics_df = self.predMetrics(data_df=data_df, plot2dcorr=plot2dcorr)
+        classified_df = self.classify_metrics(data_df=predicted_metrics_df, plotconfmatrix=plotconfmatrix)
+
 
 class preClassifier:
     def __init__(self, path_to_fitparams_csv, path_to_WF_generated, output_path):
