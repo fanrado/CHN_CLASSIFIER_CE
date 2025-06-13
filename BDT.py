@@ -86,6 +86,10 @@ def confusionMatrix(truth_Series, pred_Series, output_path, figname='confusionMa
     """
         Evaluation of the classification power.
     """
+    try:
+        os.mkdir(output_path)
+    except:
+        pass
     # Create confusion matrix
     cm = confusion_matrix(y_true=truth_Series, y_pred=pred_Series)
     columns = list(truth_Series.unique())
@@ -131,6 +135,25 @@ def corr2dplot(truth_df, pred_df, output_path, classname='c1'):
     plt.savefig(f'{output_path}/{classname}_2dCorr.png')
     plt.close()
 
+def compare_metrics(data_df, output_path):
+    # comparison between truth and prediction
+    fig, ax = plt.subplots(1,2,figsize=(10*2, 10))
+    ax[0].hist(data_df['pred_integral_R'], bins=100, linewidth=3, histtype='step', label='prediction of the integral of tail')
+    ax[0].hist(data_df['integral_R'], bins=100, linewidth=3, histtype='step', label='true integral of the tail')
+    ax[0].set_xlabel('Integral of the tail')
+    ax[0].set_ylabel('#')
+    ax[0].legend()
+    ax[0].grid(True)
+    #
+    ax[1].hist(data_df['pred_max_deviation'], bins=100, linewidth=3, histtype='step', label='prediction of the max deviation')
+    ax[1].hist(data_df['max_deviation'], bins=100, linewidth=3, histtype='step', label='true max deviation')
+    ax[1].set_xlabel('max deviation')
+    ax[1].set_ylabel('#')
+    ax[1].legend()
+    ax[1].grid(True)
+    plt.savefig(f'{output_path}/comparison_truth_predictions_bdt.png')
+    plt.close()
+
 class BDT_Classifier:
     """
         This class is used to train and test the BDT classification model.
@@ -145,7 +168,7 @@ class BDT_Classifier:
         self.class_map = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
         self.map_class = {v: k for k, v in self.class_map.items()} # numbers to classes
         self.train_df = self.read_data(path_to_data=f'{path_to_data}/train_valid')
-        self.test_df = self.read_data(path_to_data=f'{path_to_data}/test')
+        self.test_df = self.read_data(path_to_data=f'{path_to_data}/test') # not used during training
         self.classifier_model = self.model()
         self.iter_training = 0
 
@@ -173,21 +196,21 @@ class BDT_Classifier:
         objective = 'binary:logistic'
         # eval_metric = 'rmse'
         params = {
-            'n_estimators': randint(10, 100),
-            'max_depth': randint(3, 30),
+            'n_estimators': randint(100, 200),
+            'max_depth': randint(15,20),
             'max_leaves': randint(0, 30),
-            'learning_rate': uniform(0.5, 0.2),
-            'num_boost_round': randint(50, 300),
-            'min_child_weight': randint(1, 10),
-            'subsample': uniform(0.5, 0.5),
+            'learning_rate': uniform(0.4, 0.3),
+            'num_boost_round': randint(100, 300),
+            'min_child_weight': randint(15, 20),
+            'subsample': uniform(0.8, 0.1),
             'colsample_bytree': uniform(0.5, 0.5),
             'objective': [objective],
             # 'eval_metric': [eval_metric],
             'tree_method': ['hist'],
             'device': ['cuda']
         }
-        rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=3,
-                                     n_iter=10, cv=2, verbose=True)
+        rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=4,
+                                     n_iter=10, cv=3, verbose=True)
         classifier = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df['class'])
         print('Best parameters : ', classifier.best_params_)
         return classifier.best_params_
@@ -200,7 +223,7 @@ class BDT_Classifier:
         # training the classifier
         self.classifier_model.fit(X=X_train, y=y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], verbose=True)
         #
-        # test on the testing dataset
+        # test on the TESTING dataset
         predictions = self.classifier_model.predict(test_df[self.input_columns])
         predicted_classes = [self.map_class[pred] for pred in predictions]
         test_df['prediction'] = predicted_classes
@@ -212,6 +235,8 @@ class BDT_Classifier:
         # save the model if the accuracy >= 99.98%
         if (accuracy >= 99.85) or (self.iter_training >= 5):
             self.classifier_model.save_model(f'{self.output_path}/classifier_bdt_model.json')
+            # evaluate the classification power
+            confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['prediction'], output_path=f'{self.output_path}/prediction_testdataset', figname='confusionMatrix_calculatedMetrics.png')
         else:
             print('Accuracy not good enough to be saved.')
             params = self.tune_hyperamaters()
@@ -257,13 +282,13 @@ class BDT_Regressor:
         objective = 'reg:squarederror'
         eval_metric = 'rmse'
         params = {
-            'n_estimators': randint(10, 100),
-            'max_depth': randint(3, 30),
+            'n_estimators': randint(100, 200),
+            'max_depth': randint(15,20),
             'max_leaves': randint(0, 30),
-            'learning_rate': uniform(0.5, 0.2),
-            'num_boost_round': randint(50, 300),
-            'min_child_weight': randint(1, 10),
-            'subsample': uniform(0.5, 0.5),
+            'learning_rate': uniform(0.4, 0.3),
+            'num_boost_round': randint(100, 300),
+            'min_child_weight': randint(15, 20),
+            'subsample': uniform(0.8, 0.1),
             'colsample_bytree': uniform(0.5, 0.5),
             'objective': [objective],
             'eval_metric': [eval_metric],
@@ -271,8 +296,8 @@ class BDT_Regressor:
             'device': ['cuda']
         }
         model = XGBRegressor()
-        rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=3,
-                                     n_iter=10, cv=2, verbose=True)
+        rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=4,
+                                     n_iter=10, cv=3, verbose=True)
         regressor = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df[self.output_columns])
         print('Best parameters : ', regressor.best_params_)
         return regressor.best_params_
@@ -285,40 +310,40 @@ class BDT_Regressor:
         # training the regressor
         self.regressor_model.fit(X=X_train, y=y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], verbose=True)
         #
-        # test on the testing dataset
+        # test on the TESTING dataset
         predictions = self.regressor_model.predict(self.test_df[self.input_columns])
         predictions_df = pd.DataFrame(predictions, columns=[self.output_columns], index=self.test_df.index)
         predictions_df.columns = [f'pred_{c}' for c in self.output_columns]
         #
         # save the predicted values
         self.test_df = pd.concat([self.test_df, predictions_df], axis=1, join='outer')
-        self.test_df.to_csv(f'{self.output_path}/predicted_integral_max_dev.csv', index=True)
+        self.test_df.to_csv(f'{self.output_path}/prediction_testdataset/predicted_integral_max_dev_onTestdataset.csv', index=True)
         # 2d correlation plots for each class
         corr2dplot(truth_df=self.test_df[self.test_df['class']=='c1'], pred_df=self.test_df[self.test_df['class']=='c1'],
-                   classname='c1', output_path=self.output_path)
+                   classname='c1', output_path=f'{self.output_path}/prediction_testdataset')
         corr2dplot(truth_df=self.test_df[self.test_df['class']=='c2'], pred_df=self.test_df[self.test_df['class']=='c2'],
-                   classname='c2', output_path=self.output_path)
+                   classname='c2', output_path=f'{self.output_path}/prediction_testdataset')
         corr2dplot(truth_df=self.test_df[self.test_df['class']=='c3'], pred_df=self.test_df[self.test_df['class']=='c3'],
-                   classname='c3', output_path=self.output_path)
+                   classname='c3', output_path=f'{self.output_path}/prediction_testdataset')
         corr2dplot(truth_df=self.test_df[self.test_df['class']=='c4'], pred_df=self.test_df[self.test_df['class']=='c4'],
-                   classname='c4', output_path=self.output_path)
+                   classname='c4', output_path=f'{self.output_path}/prediction_testdataset')
         #
         # comparison between truth and prediction
         fig, ax = plt.subplots(1,2,figsize=(10*2, 10))
-        ax[0].hist(predictions_df['pred_integral_R'], bins=100, histtype='step', label='prediction of the integral of tail')
-        ax[0].hist(self.test_df['integral_R'], bins=100, histtype='step', label='true integral of the tail')
+        ax[0].hist(predictions_df['pred_integral_R'], bins=100, linewidth=3, histtype='step', label='prediction of the integral of tail')
+        ax[0].hist(self.test_df['integral_R'], bins=100, linewidth=3, histtype='step', label='true integral of the tail')
         ax[0].set_xlabel('Integral of the tail')
         ax[0].set_ylabel('#')
         ax[0].legend()
         ax[0].grid(True)
         #
-        ax[1].hist(predictions_df['pred_max_deviation'], bins=100, histtype='step', label='prediction of the max deviation')
-        ax[1].hist(self.test_df['max_deviation'], bins=100, histtype='step', label='true max deviation')
+        ax[1].hist(predictions_df['pred_max_deviation'], bins=100, linewidth=3, histtype='step', label='prediction of the max deviation')
+        ax[1].hist(self.test_df['max_deviation'], bins=100, linewidth=3, histtype='step', label='true max deviation')
         ax[1].set_xlabel('max deviation')
         ax[1].set_ylabel('#')
         ax[1].legend()
         ax[1].grid(True)
-        plt.savefig(f'{self.output_path}/comparison_truth_predictions_bdt.png')
+        plt.savefig(f'{self.output_path}/prediction_testdataset/comparison_truth_predictions_bdt.png')
         plt.close()
         #
         # Save the model
@@ -337,7 +362,7 @@ class BDT_Regressor:
         pred_df['pred_class'] = pred_df['pred_class'].apply(lambda x: self.map_class[x])
         test_df = pd.concat([test_df, pred_df], axis=1, join='outer')
         # evaluate the classification power
-        confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=self.output_path, figname='confusionMatrix_onOutRegressor.png')
+        confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=f'{self.output_path}/prediction_testdataset', figname='confmat_classify_predictedmetrics.png')
 
 class Classifier:
     def __init__(self, regressor_model=None, classifier_model=None, path_to_data=None, output_path=None):
@@ -383,6 +408,8 @@ class Classifier:
                     classname='c3', output_path=self.output_path)
             corr2dplot(truth_df=data_with_pred_df[data_with_pred_df['class']=='c4'], pred_df=data_with_pred_df[data_with_pred_df['class']=='c4'],
                     classname='c4', output_path=self.output_path)
+            # compare the metrics: predicted vs calculated
+            compare_metrics(data_df=data_with_pred_df, output_path=self.output_path)
         return data_with_pred_df
     
     def classify_metrics(self, data_df=None, plotconfmatrix=False):
@@ -407,11 +434,33 @@ class Classifier:
                                 plot2dcorr=False, plotconfmatrix=False):
         data_df = self.read_data(key_in_name=info_data_dict['key_in_name'], file_ext=info_data_dict['file_ext'], sep=info_data_dict['sep'])
         predicted_metrics_df = self.predMetrics(data_df=data_df, plot2dcorr=plot2dcorr)
+        predicted_metrics_df.to_csv(f'{self.output_path}/predicted_integral_max_dev_ondata.csv', index=True)
         classified_df = self.classify_metrics(data_df=predicted_metrics_df, plotconfmatrix=plotconfmatrix)
-
+        classified_df.to_csv(f'{self.output_path}/classified_data.csv', index=True)
 
 class preClassifier:
-    def __init__(self, path_to_fitparams_csv, path_to_WF_generated, output_path):
-        self.path_to_fitparams_csv = path_to_fitparams_csv
-        self.path_to_WF_generated = path_to_WF_generated
-        self.output_path = output_path
+    def __init__(self, path_to_train, output_path):
+        self.path_to_train  = path_to_train
+        self.output_path    = output_path
+
+    def read_npy(self):
+        npy2list = []
+        for f in os.listdir(self.path_to_train):
+            tmpdata = np.load('/'.join([self.path_to_train, f]), allow_pickle=True).tolist()
+            npy2list += tmpdata
+        print(npy2list[0].keys())
+        return npy2list
+    
+    def npylist2df(self, npylist):
+        data_df = pd.DataFrame()
+        for i, sample in enumerate(npylist):
+            npylist[i]['sample_id'] = i
+        data_df = pd.DataFrame(npylist)
+        return data_df
+
+    def split_train_test_valid(self, data_df):
+        X = np.array(data_df['wf'].tolist())
+        y = data_df['class'].values
+        sample_ids = data_df['sample_id'].values
+        # train/test with frac_test = 0.2
+        

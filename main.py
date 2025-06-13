@@ -1,7 +1,7 @@
 import os, sys
 import pandas as pd
 import numpy as np
-from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classifier
+from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classifier, preClassifier
 
 if __name__=='__main__':
     # train_test split
@@ -14,11 +14,17 @@ if __name__=='__main__':
     path_to_data = 'data/labelledData/labelledData'
     path_to_data = 'data/labelledData/labelledData_gpuSamples_alot/'
     output_path = 'OUTPUT/bdt'
+    for d in ['prediction_testdataset', 'TestOnData']:
+        try:
+            os.mkdir('/'.join([output_path, d]))
+        except:
+            pass
     classifier = BDT_Classifier(path_to_data=path_to_data, output_path=output_path)
     params = classifier.tune_hyperamaters()
     classifier.train(params=params)
+    
 
-    #
+    # #
     # REGRESSION MODEL
     # path_to_data = 'data/labelledData/labelledData'
     regressor = BDT_Regressor(path_to_data=path_to_data, output_path='OUTPUT/bdt')
@@ -35,3 +41,8 @@ if __name__=='__main__':
                                                            'file_ext': '.csv',
                                                            'sep': ','},
                                             plot2dcorr=True, plotconfmatrix=True)
+    #
+    # # PRECLASSIFIER
+    # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+    # npylist = preclassifier_obj.read_npy()
+    # preclassifier_obj.npylist2df(npylist=npylist)
