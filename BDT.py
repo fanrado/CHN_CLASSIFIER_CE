@@ -364,7 +364,7 @@ class BDT_Regressor:
         # evaluate the classification power
         confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=f'{self.output_path}/prediction_testdataset', figname='confmat_classify_predictedmetrics.png')
 
-class Classifier:
+class Classify:
     def __init__(self, regressor_model=None, classifier_model=None, path_to_data=None, output_path=None):
         self.regressor_model    = XGBRegressor()
         self.regressor_model.load_model(regressor_model)
@@ -442,20 +442,25 @@ class preClassifier:
     def __init__(self, path_to_train, output_path):
         self.path_to_train  = path_to_train
         self.output_path    = output_path
+        self.class_map = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
+        self.map_class = {v: k for k, v in self.class_map.items()} # numbers to classes
+        self.input_data     = self.read_npy()
 
     def read_npy(self):
         npy2list = []
         for f in os.listdir(self.path_to_train):
             tmpdata = np.load('/'.join([self.path_to_train, f]), allow_pickle=True).tolist()
             npy2list += tmpdata
-        print(npy2list[0].keys())
-        return npy2list
+        data_df = self.npylist2df(npylist=npy2list)
+        return data_df
     
     def npylist2df(self, npylist):
         data_df = pd.DataFrame()
         for i, sample in enumerate(npylist):
             npylist[i]['sample_id'] = i
         data_df = pd.DataFrame(npylist)
+        data_df = data_df.sample(frac=1)
+        data_df['class'] = data_df['class'].map(self.class_map)
         return data_df
 
     def split_train_test_valid(self, data_df):
@@ -463,4 +468,74 @@ class preClassifier:
         y = data_df['class'].values
         sample_ids = data_df['sample_id'].values
         # train/test with frac_test = 0.2
-        
+        X_train_tmp, X_test, y_train_tmp, y_test, ids_train_tmp, ids_test = train_test_split(X, y, sample_ids, test_size=0.2, random_state=42)
+        # # train/valid with frac_valid = 0.2
+        # X_train, X_valid, y_train, y_valid, ids_train, ids_valid = train_test_split(X_train_tmp, y_train_tmp, ids_train_tmp, test_size=0.2, random_state=42)
+        return {
+            "X_train": X_train_tmp,
+            "y_train": y_train_tmp,
+            "ids_train": ids_train_tmp,
+            # "X_valid": X_valid,
+            # "y_valid": y_valid,
+            # "ids_valid": ids_valid,
+            "X_test": X_test,
+            "y_test": y_test,
+            "ids_test": ids_test
+        }
+
+    def tune_hyperparameters(self, X_train, y_train):
+        model = XGBClassifier()
+        objective = 'binary:logistic'
+        # eval_metric = 'rmse'
+        params = {
+            'n_estimators': randint(100, 200),
+            'max_depth': randint(15,20),
+            'max_leaves': randint(0, 30),
+            'learning_rate': uniform(0.4, 0.3),
+            'num_boost_round': randint(100, 300),
+            'min_child_weight': randint(15, 20),
+            'subsample': uniform(0.8, 0.1),
+            'colsample_bytree': uniform(0.5, 0.5),
+            'objective': [objective],
+            # 'eval_metric': [eval_metric],
+            'tree_method': ['hist'],
+            'device': ['cuda']
+        }
+        rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=4,
+                                     n_iter=10, cv=3, verbose=True)
+        classifier = rand_cv.fit(X=X_train, y=y_train)
+        print('Best parameters : ', classifier.best_params_)
+        return classifier.best_params_
+
+    def train(self, best_params, X_set, y_set, ids_set):
+        model = XGBClassifier()
+        model.set_params(**best_params)
+        # split training dataset into train/valid with frac_valid = 0.2
+        X_train, X_valid, y_train, y_valid, ids_train, ids_valid = train_test_split(X_set, y_set, ids_set, test_size=0.2, random_state=42)
+        model.fit(X=X_train, y=y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], verbose=True)
+        return model
+
+    def run(self):
+        # split the dataset into train and test
+        splitted_dataset = self.split_train_test_valid(data_df=self.input_data.copy())
+        X_train, y_train, ids_train = splitted_dataset['X_train'], splitted_dataset['y_train'], splitted_dataset['ids_train']
+        X_test, y_test, ids_test = splitted_dataset['X_test'], splitted_dataset['y_test'], splitted_dataset['ids_test']
+        #
+        # find best hyperparameters
+        best_params = self.tune_hyperparameters(X_train=X_train, y_train=y_train)
+        model = self.train(best_params=best_params, X_set=X_train, y_set=y_train, ids_set=ids_train)
+        model.save_model(f'{self.output_path}/preclassifier/preclassifier.json')
+        #
+        # classification of the testing dataset
+        # predictions = model.predict(X_test[0].reshape(1,-1))
+        predictions = model.predict(X_test)
+        predicted_classes = [self.map_class[pred] for pred in predictions]
+        # print(predicted_classes)
+        y_df = pd.DataFrame({'pred_class': predicted_classes, 'true_class': y_test, 'sample_id': ids_test})
+        y_df['true_class'] = y_df['true_class'].apply(lambda x: self.map_class[x])
+        print(y_df)
+        confusionMatrix(truth_Series=y_df['true_class'], pred_Series=y_df['pred_class'], output_path=f'{self.output_path}/preclassifier', figname='preclassified_wf.png') # THIS RESULT IS TOO GOOD TO BE TRUE
+        #
+        # calculate the accuracy of the prediction
+        accuracy = ((y_df['true_class']==y_df['pred_class']).mean())*100
+        print(f'Accuracy = {accuracy:.2f}%')
