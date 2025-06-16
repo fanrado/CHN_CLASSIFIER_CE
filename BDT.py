@@ -1,5 +1,6 @@
 """
-
+    This script gathers the organized versions of the codes in Train_BDT.py and preClassifier.py.
+    The class Sim_waveform, which is used to save the dataset into .npy files, is still in the file preClassifier.py.
 """
 
 import os, sys
@@ -438,6 +439,7 @@ class Classify:
         classified_df = self.classify_metrics(data_df=predicted_metrics_df, plotconfmatrix=plotconfmatrix)
         classified_df.to_csv(f'{self.output_path}/classified_data.csv', index=True)
 
+# # Preclassification
 class preClassifier:
     def __init__(self, path_to_train, output_path):
         self.path_to_train  = path_to_train
@@ -533,9 +535,68 @@ class preClassifier:
         # print(predicted_classes)
         y_df = pd.DataFrame({'pred_class': predicted_classes, 'true_class': y_test, 'sample_id': ids_test})
         y_df['true_class'] = y_df['true_class'].apply(lambda x: self.map_class[x])
-        print(y_df)
         confusionMatrix(truth_Series=y_df['true_class'], pred_Series=y_df['pred_class'], output_path=f'{self.output_path}/preclassifier', figname='preclassified_wf.png') # THIS RESULT IS TOO GOOD TO BE TRUE
         #
         # calculate the accuracy of the prediction
         accuracy = ((y_df['true_class']==y_df['pred_class']).mean())*100
         print(f'Accuracy = {accuracy:.2f}%')
+        #
+        # print(self.input_data)
+        # print(len(self.input_data['sample_id']), len(ids_test))
+        # print(self.input_data.loc[ids_test])
+        test_df = self.input_data.loc[ids_test]
+        # enriched_test_df = pd.concat([test_df, y_df], axis=1, join='outer')
+        enriched_test_df = test_df.merge(y_df, how='outer', on='sample_id')
+        enriched_test_df.to_csv(f'{self.output_path}/preclassifier/preclassification_testdataset.csv', index=False)
+
+import uproot
+class TestPreclassifier:
+    """
+        This class will be used for the following tasks:
+            - open a root file.
+            - Get one 1d histogram of the channel response and store it in a numpy array.
+            - Without passing through the prediction of the fit parameters, predict the class of the input waveform directly.
+    """
+    def __init__(self, path_to_root_file='', hist_prefix='hist_0'):
+        self.path_to_root_file = path_to_root_file
+        self.hist_prefix = hist_prefix
+        self.root_data = self.read_ROOT(filename=self.path_to_root_file, hist_prefix=hist_prefix)
+        self.chn_response = None
+        self.predictions = None
+        # self.__fit_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.class_map = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
+        self.map_class = {v: k for k, v in self.class_map.items()} # numbers to classes
+    
+    def read_ROOT(self, filename, hist_prefix='hist_0'):
+        root_file = uproot.open(filename)
+        return root_file
+    
+    def get_histogram(self, root_data, histname, Npoints=70):
+        TH1D_hist = root_data[histname].to_numpy()[0][:Npoints]
+        return TH1D_hist
+    
+    def getCHN_resp(self, chn):
+        histname = '_'.join([self.hist_prefix, 'channel', f'{chn};1'])
+        hist = self.get_histogram(root_data=self.root_data, histname=histname, Npoints=70)
+        wf = hist.copy().reshape(1,-1)
+        return wf, hist # wf is the input of the preclassifier BDT; hist is the original waveform.
+    
+    def load_bdt_model(self, path_to_model=''):
+        preclassifier_model = XGBClassifier()
+        preclassifier_model.load_model(path_to_model)
+        return preclassifier_model
+
+    def run(self, path_to_model='', chn=0):
+        # # read channel response from root file
+        wf, hist = self.getCHN_resp(chn=chn)
+        # # load bdt classifier model
+        preClassifier_model = self.load_bdt_model(path_to_model=path_to_model)
+        # # predict the class of the waveform : positive peak
+        predictions = preClassifier_model.predict(wf)
+        print(self.map_class[predictions[0]])
+        print(hist.reshape(1,-1))
+        plt.figure()
+        plt.plot(hist)
+        plt.grid()
+        plt.savefig('OUTPUT/bdt/preclassifier/wf.png')
+        plt.close()
