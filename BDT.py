@@ -7,6 +7,7 @@ import os, sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from xgboost import XGBRegressor, XGBClassifier
 import xgboost as xgb
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
@@ -594,9 +595,11 @@ class TestPreclassifier:
         # # predict the class of the waveform : positive peak
         predictions = preClassifier_model.predict(wf)
         print(self.map_class[predictions[0]])
-        print(hist.reshape(1,-1))
-        plt.figure()
-        plt.plot(hist)
-        plt.grid()
-        plt.savefig('OUTPUT/bdt/preclassifier/wf.png')
+        posmax = np.argmax(hist)
+        fig,ax = plt.subplots()
+        rect = patches.Rectangle((posmax+4, -500), 70-posmax-4, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
+        ax.plot(hist)
+        ax.add_patch(rect)
+        ax.grid()
+        fig.savefig(f'OUTPUT/bdt/preclassifier//testPreclassifier/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
         plt.close()

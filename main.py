@@ -50,4 +50,5 @@ if __name__=='__main__':
     #
     # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
     test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
-    test_.run(path_to_model='OUTPUT/bdt/preclassifier/preclassifier.json', chn=200)
+    for chn in range(100):
+        test_.run(path_to_model='OUTPUT/bdt/preclassifier/preclassifier.json', chn=chn)
