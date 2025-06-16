@@ -518,6 +518,18 @@ class preClassifier:
         model.fit(X=X_train, y=y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], verbose=True)
         return model
 
+    def plot_wf_with_class(self, wf_data, output_path='', trueclass='', predclass=''):
+        posmax = np.argmax(wf_data.reshape(-1,1))
+        maxamp = wf_data[posmax]
+        fig, ax = plt.subplots()
+        rect = patches.Rectangle((posmax+4, -int(maxamp/6)), 70-posmax-4-1, maxamp/3, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
+        ax.plot(wf_data, label=f'true class : {trueclass}; pred class : {predclass}')
+        ax.add_patch(rect)
+        ax.grid(True)
+        ax.legend()
+        fig.savefig(output_path)
+        plt.close()
+
     def run(self):
         # split the dataset into train and test
         splitted_dataset = self.split_train_test_valid(data_df=self.input_data.copy())
@@ -549,6 +561,40 @@ class preClassifier:
         # enriched_test_df = pd.concat([test_df, y_df], axis=1, join='outer')
         enriched_test_df = test_df.merge(y_df, how='outer', on='sample_id')
         enriched_test_df.to_csv(f'{self.output_path}/preclassifier/preclassification_testdataset.csv', index=False)
+    
+    def generate_wf_with_class(self, enriched_test_df):
+        c1_df = enriched_test_df[enriched_test_df['true_class']=='c1'].copy().reset_index().drop('index', axis=1)
+        c1_df = c1_df.iloc[:100].copy().reset_index().drop('index',axis=1)
+        X = np.array(c1_df['wf'].tolist())
+        ytrue = c1_df['true_class'].tolist()
+        ypred = c1_df['pred_class'].tolist()
+        chn = c1_df['#Ch.#'].tolist()
+        for id in list(c1_df.index):
+            self.plot_wf_with_class(wf_data=X[id], output_path=f'{self.output_path}/preclassifier/testPreclassifier/chresp_TRUE{ytrue[id]}_PRED{ypred[id]}_chn{chn[id]}.png', trueclass=ytrue[id], predclass=ypred[id])
+        c2_df = enriched_test_df[enriched_test_df['true_class']=='c2'].copy().reset_index().drop('index', axis=1)
+        c2_df = c2_df.iloc[:100].copy().reset_index().drop('index',axis=1)
+        X = np.array(c2_df['wf'].tolist())
+        ytrue = c2_df['true_class'].tolist()
+        ypred = c2_df['pred_class'].tolist()
+        chn = c2_df['#Ch.#'].tolist()
+        for id in list(c2_df.index):
+            self.plot_wf_with_class(wf_data=X[id], output_path=f'{self.output_path}/preclassifier/testPreclassifier/chresp_TRUE{ytrue[id]}_PRED{ypred[id]}_chn{chn[id]}.png', trueclass=ytrue[id], predclass=ypred[id])
+        c3_df = enriched_test_df[enriched_test_df['true_class']=='c3'].copy().reset_index().drop('index', axis=1)
+        c3_df = c3_df.iloc[:100].copy().reset_index().drop('index',axis=1)
+        X = np.array(c3_df['wf'].tolist())
+        ytrue = c3_df['true_class'].tolist()
+        ypred = c3_df['pred_class'].tolist()
+        chn = c3_df['#Ch.#'].tolist()
+        for id in list(c3_df.index):
+            self.plot_wf_with_class(wf_data=X[id], output_path=f'{self.output_path}/preclassifier/testPreclassifier/chresp_TRUE{ytrue[id]}_PRED{ypred[id]}_chn{chn[id]}.png', trueclass=ytrue[id], predclass=ypred[id])
+        c4_df = enriched_test_df[enriched_test_df['true_class']=='c4'].copy().reset_index().drop('index', axis=1)
+        c4_df = c4_df.iloc[:100].copy().reset_index().drop('index',axis=1)
+        X = np.array(c4_df['wf'].tolist())
+        ytrue = c4_df['true_class'].tolist()
+        ypred = c4_df['pred_class'].tolist()
+        chn = c4_df['#Ch.#'].tolist()
+        for id in list(c4_df.index):
+            self.plot_wf_with_class(wf_data=X[id], output_path=f'{self.output_path}/preclassifier/testPreclassifier/chresp_TRUE{ytrue[id]}_PRED{ypred[id]}_chn{chn[id]}.png', trueclass=ytrue[id], predclass=ypred[id])
 
 import uproot
 class TestPreclassifier:
@@ -595,11 +641,13 @@ class TestPreclassifier:
         # # predict the class of the waveform : positive peak
         predictions = preClassifier_model.predict(wf)
         print(self.map_class[predictions[0]])
-        posmax = np.argmax(hist)
+        posmax = np.argmax(wf.reshape(-1,1))
+        print(70-posmax-4)
         fig,ax = plt.subplots()
-        rect = patches.Rectangle((posmax+4, -500), 70-posmax-4, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
+        rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
         ax.plot(hist)
         ax.add_patch(rect)
         ax.grid()
         fig.savefig(f'OUTPUT/bdt/preclassifier//testPreclassifier/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
         plt.close()
+        sys.exit()
