@@ -42,13 +42,13 @@ if __name__=='__main__':
     #                                                        'sep': ','},
     #                                         plot2dcorr=True, plotconfmatrix=True)
     #
-    # #
-    # PRECLASSIFIER
-    preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-    preclassifier_obj.run()
+    # # #
+    # # PRECLASSIFIER
+    # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+    # preclassifier_obj.run()
 
-    # #
-    # # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
-    # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
-    # for chn in range(300):
-    #     test_.run(path_to_model='OUTPUT/bdt/preclassifier/preclassifier.json', chn=chn)
+    #
+    # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
+    test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0')
+    for chn in range(300):
+        test_.run(path_to_model='OUTPUT/bdt/preclassifier/preclassifier.json', chn=chn)
