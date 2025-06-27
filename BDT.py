@@ -15,8 +15,77 @@ from scipy.stats import randint, uniform
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 from matplotlib.colors import LogNorm
+from response import *
 
-def split_train_test_dataset(path_to_data=None, frac_test=0.2):
+## This class Sim_waveform is a copy of the code in preClassifier
+class Sim_waveform:
+    '''
+        Generate waveforms using the fit parameters and the response function.
+    '''
+    def __init__(self, path_to_sim=None, output_path=None, N_samples=3000):
+        self.path_to_sim = path_to_sim
+        self.output_path = output_path
+        self.sim_data = pd.DataFrame()
+        self.N_samples = N_samples
+        if self.path_to_sim is not None:
+            self.sim_data = self.read_csv_sim()
+        # self.response_params = ['#Ch.#', 't', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.response_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+
+    def read_csv_sim(self):
+        tmpdata = pd.read_csv(self.path_to_sim)
+        cols = list(tmpdata.columns)
+        cols_to_be_removed = [c for c in cols if 'Unnamed' in c]
+        tmpdata.drop(labels=cols_to_be_removed, axis=1, inplace=True)
+        tmpdata['#Ch.#'] = tmpdata['#Ch.#'].astype('int32')
+        return tmpdata
+    
+    def __generate_1wf(self, params=None):
+        if params is None:
+            return None
+        x = np.linspace(params[0], params[0]+70, 70)
+        R = response(x=x, par=params)
+        return R
+    
+    def run(self):
+        N_samples = self.sim_data.shape[0]
+        # N_samples = 10000
+        key_name = self.path_to_sim.split('/')[-1].split('.')[0].split('_')[3]
+        for isample in range(N_samples):
+            params = list(self.sim_data[self.response_params].iloc[isample])
+            R = self.__generate_1wf(params=params)
+            dict_params = dict(zip(self.response_params, params))
+            dict_params['#Ch.#'] = self.sim_data['#Ch.#'].iloc[isample]
+            dict_params['class'] = self.sim_data['class'].iloc[isample]
+            dict_params['wf'] = R
+            dict_params['integral_R'] = self.sim_data['integral_R'].iloc[isample]
+            dict_params['max_deviation'] = self.sim_data['max_deviation'].iloc[isample]
+            np.savez(f'{self.output_path}/wf_{key_name}_{isample}.npz', **dict_params)
+
+    def data2npy(self):
+        """
+            Save the self.sim_data along with the waveform datapoints to a .npy file.
+        """
+        enriched_data = []
+        # N_samples = self.sim_data.shape[0]
+        N_samples = self.N_samples
+        for isample in range(N_samples):
+            params = list(self.sim_data[self.response_params].iloc[isample])
+            R = self.__generate_1wf(params=params)
+            dict_params = dict(zip(self.response_params, params))
+            dict_params['#Ch.#'] = self.sim_data['#Ch.#'].iloc[isample]
+            dict_params['class'] = self.sim_data['class'].iloc[isample]
+            dict_params['wf'] = R
+            dict_params['integral_R'] = self.sim_data['integral_R'].iloc[isample]
+            dict_params['max_deviation'] = self.sim_data['max_deviation'].iloc[isample]
+            enriched_data.append(dict_params)
+        # save the enriched_data to a .npy file
+        output_file = self.path_to_sim.split('/')[-1].split('.')[0]
+        output_file = f'{self.output_path}/{output_file}.npy'
+        np.save(output_file, enriched_data)
+        print(f'Data saved to {output_file}')
+
+def split_train_test_dataset(path_to_data=None, output_path=None, frac_test=0.2, N1=None, N2=None, N3=None, N4=None):
     """
         Split training and testing dataset:
             - read the dataset for each class
@@ -25,9 +94,13 @@ def split_train_test_dataset(path_to_data=None, frac_test=0.2):
     """
 
     # try to create the output folders if they don't exist
+    try:
+        os.mkdir(output_path)
+    except:
+        pass
     for d in ['train_valid', 'test']:
         try:
-            os.mkdir('/'.join([path_to_data, d]))
+            os.mkdir('/'.join([output_path, d]))
         except:
             pass
 
@@ -52,37 +125,43 @@ def split_train_test_dataset(path_to_data=None, frac_test=0.2):
     N_c2 = len(c2_df)
     N_c3 = len(c3_df)
     N_c4 = len(c4_df)
+    if (N1 is not None) and (N2 is not None) and (N3 is not None) and (N4 is not None):
+        N_c1, N_c2, N_c3, N_c4 = N1, N2, N3, N4
+
 
     # split tran/valid and test
     ## c1
     N_test_c1 = int(N_c1*frac_test)
     N_train_c1 = N_c1 - N_test_c1
+    # print(N_train_c1, N_test_c1)
+    # sys.exit()
     train_c1 = c1_df.iloc[:N_train_c1]
-    test_c1 = c1_df.iloc[N_test_c1:N_c1]
-    train_c1.to_csv('/'.join([path_to_data,'train_valid/train_c1.csv']), index=False)
-    test_c1.to_csv('/'.join([path_to_data, 'test/test_c1.csv']), index=False)
+    test_c1 = c1_df.iloc[N_train_c1:N_c1]
+    train_c1.to_csv('/'.join([output_path,'train_valid/train_c1.csv']), index=False)
+    test_c1.to_csv('/'.join([output_path, 'test/test_c1.csv']), index=False)
     ## c2
     N_test_c2 = int(N_c2*frac_test)
     N_train_c2 = N_c2 - N_test_c2
     train_c2 = c2_df.iloc[:N_train_c2]
-    test_c2 = c2_df.iloc[N_test_c2:N_c2]
-    train_c2.to_csv('/'.join([path_to_data,'train_valid/train_c2.csv']), index=False)
-    test_c2.to_csv('/'.join([path_to_data, 'test/test_c2.csv']), index=False)
+    test_c2 = c2_df.iloc[N_train_c2:N_c2]
+    train_c2.to_csv('/'.join([output_path,'train_valid/train_c2.csv']), index=False)
+    test_c2.to_csv('/'.join([output_path, 'test/test_c2.csv']), index=False)
     ## c3
     N_test_c3 = int(N_c3*frac_test)
     N_train_c3 = N_c3 - N_test_c3
     train_c3 = c3_df.iloc[:N_train_c3]
-    test_c3 = c3_df.iloc[N_test_c3:N_c3]
-    train_c3.to_csv('/'.join([path_to_data,'train_valid/train_c3.csv']), index=False)
-    test_c3.to_csv('/'.join([path_to_data, 'test/test_c3.csv']), index=False)
+    test_c3 = c3_df.iloc[N_train_c3:N_c3]
+    train_c3.to_csv('/'.join([output_path,'train_valid/train_c3.csv']), index=False)
+    test_c3.to_csv('/'.join([output_path, 'test/test_c3.csv']), index=False)
     ## c4
     N_test_c4 = int(N_c4*frac_test)
     N_train_c4 = N_c4 - N_test_c4
     train_c4 = c4_df.iloc[:N_train_c4]
-    test_c4 = c4_df.iloc[N_test_c4:N_c4]
-    train_c4.to_csv('/'.join([path_to_data,'train_valid/train_c4.csv']), index=False)
-    test_c4.to_csv('/'.join([path_to_data, 'test/test_c4.csv']), index=False)
+    test_c4 = c4_df.iloc[N_train_c4:N_c4]
+    train_c4.to_csv('/'.join([output_path,'train_valid/train_c4.csv']), index=False)
+    test_c4.to_csv('/'.join([output_path, 'test/test_c4.csv']), index=False)
 
+from sklearn.metrics import classification_report
 
 def confusionMatrix(truth_Series, pred_Series, output_path, figname='confusionMatrix_onOutRegressor.png'):
     """
@@ -92,18 +171,27 @@ def confusionMatrix(truth_Series, pred_Series, output_path, figname='confusionMa
         os.mkdir(output_path)
     except:
         pass
+    
+    # validation of the confusion matrix
+    # report = classification_report(y_true=truth_Series, y_pred=pred_Series, target_names=['c1', 'c2', 'c3', 'c4'])
+    # print("Classification report:")
+    # print(report)
     # Create confusion matrix
+    target_names=['c1', 'c2', 'c3', 'c4']
     cm = confusion_matrix(y_true=truth_Series, y_pred=pred_Series)
-    columns = list(truth_Series.unique())
-
+    # columns = list(truth_Series.unique())
+    # print(cm)
+    # print(columns)
+    # print(list(pred_Series.unique()))
+    # sys.exit()
     # Create a figure and axis
     plt.figure(figsize=(10, 8))
 
     # Create heatmap
     cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
     sns.heatmap(cm_normalized, annot=True, fmt='.1%', cmap='crest',
-                xticklabels=columns,
-                yticklabels=columns)
+                xticklabels=target_names,
+                yticklabels=target_names)
 
     # Add labels
     plt.xlabel('Predicted Class')
@@ -173,6 +261,7 @@ class BDT_Classifier:
         self.test_df = self.read_data(path_to_data=f'{path_to_data}/test') # not used during training
         self.classifier_model = self.model()
         self.iter_training = 0
+        self.n_iter = 10
 
     def model(self):
         classifier_model = XGBClassifier()
@@ -193,7 +282,7 @@ class BDT_Classifier:
         # print(df)
         return df
 
-    def tune_hyperamaters(self):
+    def tune_hyperamaters(self, n_iter=10):
         model = XGBClassifier()
         objective = 'binary:logistic'
         # eval_metric = 'rmse'
@@ -212,7 +301,7 @@ class BDT_Classifier:
             'device': ['cuda']
         }
         rand_cv = RandomizedSearchCV(estimator=model, param_distributions=params, n_jobs=4,
-                                     n_iter=10, cv=3, verbose=True)
+                                     n_iter=n_iter, cv=3, verbose=True)
         classifier = rand_cv.fit(X=self.train_df[self.input_columns], y=self.train_df['class'])
         print('Best parameters : ', classifier.best_params_)
         return classifier.best_params_
@@ -235,15 +324,17 @@ class BDT_Classifier:
         accuracy = ((test_df['class']==test_df['prediction']).mean())*100
         print(f'Accuracy = {accuracy:.2f}%')
         # save the model if the accuracy >= 99.98%
-        if (accuracy >= 99.85) or (self.iter_training >= 5):
-            self.classifier_model.save_model(f'{self.output_path}/classifier_bdt_model.json')
-            # evaluate the classification power
-            confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['prediction'], output_path=f'{self.output_path}/prediction_testdataset', figname='confusionMatrix_calculatedMetrics.png')
-        else:
-            print('Accuracy not good enough to be saved.')
-            params = self.tune_hyperamaters()
-            self.train(params=params)
-            self.iter_training += 1
+        # if (accuracy >= 99.85) or (self.iter_training >= 5):
+        self.classifier_model.save_model(f'{self.output_path}/classifier_bdt_model.json')
+        # evaluate the classification power
+        confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['prediction'], output_path=f'{self.output_path}/prediction_testdataset', figname='confusionMatrix_calculatedMetrics.png')
+        # else:
+        #     print('Accuracy not good enough to be saved.')
+        #     self.n_iter += 1
+        #     params = self.tune_hyperamaters(n_iter=self.n_iter)
+        #     self.train(params=params)
+        #     self.iter_training += 1
+        #     print(f'ITER_TRAINING = {self.iter_training}')
 
 class BDT_Regressor:
     """
@@ -365,6 +456,7 @@ class BDT_Regressor:
         test_df = pd.concat([test_df, pred_df], axis=1, join='outer')
         # evaluate the classification power
         confusionMatrix(truth_Series=test_df['class'], pred_Series=test_df['pred_class'], output_path=f'{self.output_path}/prediction_testdataset', figname='confmat_classify_predictedmetrics.png')
+        test_df.to_csv(f'{self.output_path}/prediction_testdataset/classified_predicted_integral_max_dev_onTestdataset.csv', index=True)
 
 class Classify:
     def __init__(self, regressor_model=None, classifier_model=None, path_to_data=None, output_path=None):
@@ -604,17 +696,18 @@ class TestPreclassifier:
             - Get one 1d histogram of the channel response and store it in a numpy array.
             - Without passing through the prediction of the fit parameters, predict the class of the input waveform directly.
     """
-    def __init__(self, path_to_root_file='', hist_prefix='hist_0'):
-        self.path_to_root_file = path_to_root_file
-        self.hist_prefix = hist_prefix
-        self.root_data = self.read_ROOT(filename=self.path_to_root_file, hist_prefix=hist_prefix)
-        self.chn_response = None
-        self.predictions = None
-        # self.__fit_params = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
-        self.class_map = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
-        self.map_class = {v: k for k, v in self.class_map.items()} # numbers to classes
+    def __init__(self, path_to_root_file='', hist_prefix='hist_0', output_path=''):
+        self.path_to_root_file  = path_to_root_file
+        self.output_path        = output_path
+        self.hist_prefix        = hist_prefix
+        self.root_data          = self.read_ROOT(filename=self.path_to_root_file)
+        self.chn_response       = None
+        self.predictions        = None
+        # self.__fit_params     = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
+        self.class_map          = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
+        self.map_class          = {v: k for k, v in self.class_map.items()} # numbers to classes
     
-    def read_ROOT(self, filename, hist_prefix='hist_0'):
+    def read_ROOT(self, filename):
         root_file = uproot.open(filename)
         return root_file
     
@@ -634,21 +727,27 @@ class TestPreclassifier:
         return preclassifier_model
 
     def run(self, path_to_model='', chn=0):
+        try:
+            os.mkdir(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT')
+        except:
+            pass
         # # read channel response from root file
         wf, hist = self.getCHN_resp(chn=chn)
         # # load bdt classifier model
         preClassifier_model = self.load_bdt_model(path_to_model=path_to_model)
         # # predict the class of the waveform : positive peak
         predictions = preClassifier_model.predict(wf)
-        print(self.map_class[predictions[0]])
+        # print(self.map_class[predictions[0]])
         posmax = np.argmax(wf.reshape(-1,1))
-        print(70-posmax-4)
+        # print(70-posmax-4)
         fig,ax = plt.subplots()
         # rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
         ax.plot(hist, label=f'pred class = {self.map_class[predictions[0]]}')
         ax.legend()
         # ax.add_patch(rect)
         ax.grid()
-        fig.savefig(f'OUTPUT/bdt/preclassifier//testPreclassifier_fromROOT/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
+        fig.savefig(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
         plt.close()
         # sys.exit()
+        if self.map_class[predictions[0]]=='c3':
+            print(self.map_class[predictions[0]])
