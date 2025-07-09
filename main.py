@@ -4,7 +4,7 @@ import numpy as np
 from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform
 
 split_dataset_classifier = False # set to True if you need to split the dataset using the classification stage into train and test
-run_classifier = False
+run_classifier = True
 run_regression = False
 generate_npy = False # set to true if you need to generate the npy files for the preclassification
 run_preclassification = True
@@ -114,10 +114,10 @@ if __name__=='__main__':
 
         # # PRECLASSIFIER
         if run_preclassification:
-            # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-            # preclassifier_obj.run()
+            preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+            preclassifier_obj.run()
 
-            #
+            
             # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
             test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0', output_path=output_path)
             for chn in range(2000):
