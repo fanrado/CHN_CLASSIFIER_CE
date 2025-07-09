@@ -284,9 +284,11 @@ class BDT_Classifier:
 
     def tune_hyperamaters(self, n_iter=10):
         model = XGBClassifier()
-        objective = 'binary:logistic'
+        # objective = 'binary:logistic'
+        objective = 'multi:softprob'
         # eval_metric = 'rmse'
         params = {
+            'num_class': [4],
             'n_estimators': randint(100, 200),
             'max_depth': randint(15,20),
             'max_leaves': randint(0, 30),
@@ -580,9 +582,11 @@ class preClassifier:
 
     def tune_hyperparameters(self, X_train, y_train):
         model = XGBClassifier()
-        objective = 'binary:logistic'
+        # objective = 'binary:logistic'
+        objective = 'multi:softprob'
         # eval_metric = 'rmse'
         params = {
+            'num_class': [4],
             'n_estimators': randint(100, 200),
             'max_depth': randint(15,20),
             'max_leaves': randint(0, 30),
