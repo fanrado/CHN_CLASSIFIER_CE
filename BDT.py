@@ -114,7 +114,7 @@ class Sim_waveform:
         # Generate all waveforms at once using vectorized response function
         R_batch = response_torch(x_arrays, params_tensor)  # Shape: [batch_size, 70]
         params_tensor[:, 2] = params_tensor[:, 2] * 0.512
-        
+
         # Move results back to CPU for numpy operations
         R_batch_cpu = R_batch.cpu().numpy()
         params_cpu = params_tensor.cpu().numpy()
@@ -762,18 +762,26 @@ class TestPreclassifier:
     """
     def __init__(self, path_to_root_file='', hist_prefix='hist_0', output_path=''):
         self.path_to_root_file  = path_to_root_file
+        self.run_number         = int(path_to_root_file.split('run_')[-1].split('.')[0])
         self.output_path        = output_path
         self.hist_prefix        = hist_prefix
-        self.root_data          = self.read_ROOT(filename=self.path_to_root_file)
+        self.root_data, self.all_channels          = self.read_ROOT(filename=self.path_to_root_file)
+        # print(self.all_channels)
         self.chn_response       = None
         self.predictions        = None
         # self.__fit_params     = ['t', 'A_0', 't_p', 'k3', 'k4', 'k5', 'k6']
         self.class_map          = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
         self.map_class          = {v: k for k, v in self.class_map.items()} # numbers to classes
+        self.class_to_meaning   = {'c1': 'Undershoot only',
+                                   'c2': 'Undershoot with small overshoot',
+                                   'c3': 'Overshoot with small undershoot',
+                                   'c4': 'Overshoot only'}
     
     def read_ROOT(self, filename):
         root_file = uproot.open(filename)
-        return root_file
+        all_hist1d = [f for f in root_file.keys() if self.hist_prefix in f]
+        all_channels = [int(hist1d.split(';')[0].split('_')[-1]) for hist1d in all_hist1d]
+        return root_file, all_channels
     
     def get_histogram(self, root_data, histname, Npoints=70):
         TH1D_hist = root_data[histname].to_numpy()[0][:Npoints]
@@ -790,7 +798,7 @@ class TestPreclassifier:
         preclassifier_model.load_model(path_to_model)
         return preclassifier_model
 
-    def run(self, path_to_model='', chn=0):
+    def predict_oneCHN(self, path_to_model='', chn=0, savefig=False):
         try:
             os.mkdir(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT')
         except:
@@ -801,17 +809,38 @@ class TestPreclassifier:
         preClassifier_model = self.load_bdt_model(path_to_model=path_to_model)
         # # predict the class of the waveform : positive peak
         predictions = preClassifier_model.predict(wf)
-        # print(self.map_class[predictions[0]])
-        posmax = np.argmax(wf.reshape(-1,1))
-        # print(70-posmax-4)
-        fig,ax = plt.subplots()
-        # rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
-        ax.plot(hist, label=f'pred class = {self.map_class[predictions[0]]}')
-        ax.legend()
-        # ax.add_patch(rect)
-        ax.grid()
-        fig.savefig(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
-        plt.close()
-        # sys.exit()
-        if self.map_class[predictions[0]]=='c3':
-            print(self.map_class[predictions[0]])
+        predicted_class = self.map_class[predictions[0]]
+        # print(f'Predicted class : {predicted_class}')
+
+        if savefig:
+            # print(self.map_class[predictions[0]])
+            posmax = np.argmax(wf.reshape(-1,1))
+            # print(70-posmax-4)
+            fig,ax = plt.subplots()
+            # rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
+            ax.plot(hist, label=f'pred class = {self.map_class[predictions[0]]}')
+            ax.legend()
+            # ax.add_patch(rect)
+            ax.grid()
+            fig.savefig(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
+            plt.close()
+            # sys.exit()
+            if self.map_class[predictions[0]]=='c3':
+                print(self.map_class[predictions[0]])
+
+        return {'chn': chn, 'class': predicted_class, 'class_meaning': self.class_to_meaning[predicted_class]}
+    
+    def run(self, path_to_model='', savefig=False):
+        all_chn_results = {'chn': [], 'class': [], 'class_meaning': []}
+        N = 2000
+        for chn in self.all_channels:
+            onechn_pred = self.predict_oneCHN(path_to_model=path_to_model, chn=chn, savefig=savefig)
+            all_chn_results['chn'].append(onechn_pred['chn'])
+            all_chn_results['class'].append(onechn_pred['class'])
+            all_chn_results['class_meaning'].append(onechn_pred['class_meaning'])
+            if chn%100==0:
+                print(f'{100*chn/N:.2f}% of {N}')
+            if chn == N:
+                break
+        prediction_df = pd.DataFrame(all_chn_results)
+        prediction_df.to_csv(f'{self.output_path}/preclassifier/preclassification_ROOT_run_{self.run_number}.csv', index=False)
