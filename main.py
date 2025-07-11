@@ -3,14 +3,15 @@ import pandas as pd
 import numpy as np
 from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform
 
-split_dataset_classifier = False # set to True if you need to split the dataset using the classification stage into train and test
-run_classifier = True
-run_regression = False
-generate_npy = False # set to true if you need to generate the npy files for the preclassification
-run_preclassification = True
-# N_samples = 3000
-# all_nsamples = [3000+i*4000 for i in range(20)]
-all_nsamples = [200000]
+split_dataset_classifier    = True # set to True if you need to split the dataset using the classification stage into train and test
+run_classifier              = True
+run_regression              = True
+generate_npy                = False # set to true if you need to generate the npy files for the preclassification
+run_preclassification       = False
+# N_samples                 = 3000
+# all_nsamples              = [3000+i*4000 for i in range(20)]
+# all_nsamples              = [200000]
+all_nsamples                = [100000]
 print("All number of samples to be used: ", all_nsamples)
 print("Press Enter to continue....")
 sys.stdin.read(1)
@@ -18,8 +19,11 @@ sys.stdin.read(1)
 # N_samples = None
 if __name__=='__main__':
     for N_samples in all_nsamples:
-        path_to_data = 'data/labelledData/labelledData_gpuSamples_alot/'
-        output_path = f'OUTPUT/bdt_Ntotsamples_{N_samples}'
+        # path_to_data = 'data/labelledData/labelledData_gpuSamples_alot/'
+        # output_path = f'OUTPUT/bdt_Ntotsamples_{N_samples}'
+
+        path_to_data = 'DATASET_and_OUTPUT/fine_resolution/data/synthetic_dataset'
+        output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/bdt_Ntotsamples_{N_samples}'
         # path_to_data = 'data/labelledData'
         # output_path = f'OUTPUT/bdt_fitresults'
         try:
@@ -35,7 +39,8 @@ if __name__=='__main__':
         # train_test split
         if split_dataset_classifier:
             # N = 3000
-            root_path = 'data/labelledData/labelledData_gpuSamples_alot'
+            # root_path = 'data/labelledData/labelledData_gpuSamples_alot'
+            root_path = 'DATASET_and_OUTPUT/fine_resolution/data/synthetic_dataset'
             OUT_PATH = '/'.join([root_path, f'Ntotsamples_{N_samples}'])
             # root_path = path_to_data
             # OUT_PATH = root_path
@@ -63,7 +68,7 @@ if __name__=='__main__':
             # # CLASSIFICATION OF THE FIT PARAMETERS : DATA
             combined_classifier = Classify(regressor_model=f'{output_path}/regressor_bdt_model.json',
                                             classifier_model=f'{output_path}/classifier_bdt_model.json',
-                                            path_to_data='data/labelledData',
+                                            path_to_data='DATASET_and_OUTPUT/fine_resolution/data/fit_results_realdata', # path to real data (labelled, for comparison with prediction)
                                             output_path=f'{output_path}/TestOnData')
             combined_classifier.run_classification(info_data_dict={'key_in_name': 'fit_results',
                                                                 'file_ext': '.csv',
