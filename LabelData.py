@@ -139,7 +139,9 @@ class LabelData:
             # Calculation in CPU
             x = np.linspace(tmpdata['t'].iloc[i], tmpdata['t'].iloc[i]+70, 70)
             par0 = list(tmpdata[self.response_params].iloc[i])
-            
+            #
+            ## par0[2]: us to ticks
+            par0[2] = par0[2] / 0.512
             # integral_R_selected, deviations = self.calculate_Integral_MaxDev_gpu_batch(pars=torch.tensor(par0, dtype=torch.float32, device=self.device).unsqueeze(0))
             # integral_R_ideal_selected = 0
             # try:
@@ -171,12 +173,14 @@ class LabelData:
             # y1 = R[pos_peak+6:]
             # x2 = x[pos_peak+6:]
             # y2 = R_ideal[pos_peak+6:]
-            xtail = x[pos_peak+4:]
+            # indexshift = 4
+            indexshift = 6
+            xtail = x[pos_peak+indexshift:]
             # find intersection
-            x1 = x[pos_peak+4:]
-            y1 = R[pos_peak+4:]
-            x2 = x[pos_peak+4:]
-            y2 = R_ideal[pos_peak+4:]
+            x1 = x[pos_peak+indexshift:]
+            y1 = R[pos_peak+indexshift:]
+            x2 = x[pos_peak+indexshift:]
+            y2 = R_ideal[pos_peak+indexshift:]
             try:
                 x_intersect, y_intersect = self.find_intersection(x1,y1,x2, y2)
             except:
@@ -184,7 +188,7 @@ class LabelData:
             # select data between pos_peak+6 and x_intersect
             # mask = x1 <= x_intersect
             # mask = x1 <= x[pos_peak+50] # what if not finding the intersection ==> fixing the integration domain
-            mask = x1 <= x[70-(pos_peak+4)-1] # what if not finding the intersection ==> fixing the integration domain
+            mask = x1 <= x[70-(pos_peak+indexshift)-1] # what if not finding the intersection ==> fixing the integration domain
             x_selected = x1[mask]
             R_selected = y1[mask]
             R_ideal_selected = y2[mask]
@@ -541,18 +545,18 @@ class LabelData:
         t0 = pars[:,0].unsqueeze(1)   # [B,1]
         # xs = t0 + torch.arange(L, device=self.device).view(1, L)
         xs = t0 + torch.linspace(0, 70, L, device=self.device).view(1, L)
-        
+        pars[:, 2] = pars[:, 2] / 0.512
         # compute in batch
         R      = response_torch(xs, pars)              # [B,L]
         R_ideal= response_legacy_torch(xs, pars)       # [B,L]
 
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
-        # gather fixed‐length tail 50
+        indexshift = 6
         # try:
         idx_base = None
         try:
-            idx_base = pos_peak.unsqueeze(1) + torch.arange(4, 45, device=self.device).view(1,41)
+            idx_base = pos_peak.unsqueeze(1) + torch.arange(indexshift, indexshift+50+1, device=self.device).view(1,51)
             # idx_base = pos_peak.unsqueeze(1) + torch.arange(4, 54, device=self.device).view(1,50)
         except:
             return 1e8, 1e8
@@ -595,7 +599,7 @@ class LabelData:
 
         data = data.dropna(axis=0)
         # kde = gaussian_kde(data.to_numpy().T, bw_method='scott')
-        kde = gaussian_kde(data.to_numpy().T, bw_method=1e-2)
+        kde = gaussian_kde(data.to_numpy().T, bw_method=1e-20)
         # kde = gaussian_kde(data.to_numpy().T, bw_method=1e-20)
         # kde = gaussian_kde(data.to_numpy().T)
         # kde_factor = kde.factor * 0.1
@@ -634,8 +638,8 @@ class LabelData:
             # print(ints, devs)
             # print('HERE')
             # 3) filter too‐large tails
-            # mask1 = (np.abs(ints) <= 1e4) & (np.abs(devs) <= 1e3)
-            mask1 = (np.abs(ints) <= 35000) & (np.abs(devs) <= 3000)
+            # mask1 = (np.abs(ints) <= 35000) & (np.abs(devs) <= 3000)
+            mask1 = (np.abs(ints) <= 60000) & (np.abs(devs) <= 6000)
             if not mask1.any():
                 continue
             # 4) classify these masked ones on CPU *without* looping in python
@@ -678,16 +682,17 @@ class LabelData:
 
 if __name__ == '__main__':
     ## LABELLING THE DATA
-    # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
-    # labeldata_obj.runLabelling()
-    # list_file_source = [f for f in os.listdir('data/fit_params/Fit_Results') if '.txt' in f]
-    # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_gpu') if ('.csv' in f) and ('batchSize' not in f)]
+    # PATH_TO_REALDATA = 'DATASET_and_OUTPUT/Fit_Results_realdata'
+    # # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
+    # # labeldata_obj.runLabelling()
+    # list_file_source = [f for f in os.listdir(PATH_TO_REALDATA) if '.txt' in f]
+    # # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_gpu') if ('.csv' in f) and ('batchSize' not in f)]
     # print(list_file_source)
-    # # # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
-    # # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
+    # # # # list_file_source = [f for f in os.listdir('data/kde_syntheticdata')]
+    # # # list_file_source = [f for f in os.listdir('data') if '.csv' in f]
     # for f in list_file_source:
-    #     # labeldata_obj = LabelData(root_path='data//fit_params/Fit_Results', filename=f, fixHeader=False, sep='\t')
-    #     labeldata_obj = LabelData(root_path='data/labelledData/labelledData_gpu', filename=f, fixHeader=False, sep=',')
+    #     labeldata_obj = LabelData(root_path=PATH_TO_REALDATA, filename=f, fixHeader=False, sep='\t')
+    #     # labeldata_obj = LabelData(root_path='data/labelledData/labelledData_gpu', filename=f, fixHeader=False, sep=',')
     #     labeldata_obj.runLabelling()
     ##
     # # GENERATE NEW DATASET
@@ -700,8 +705,9 @@ if __name__ == '__main__':
     # # labeldata_obj.GenerateNewSamples(N_samples=100000, target_class='c2')
 
     ## GENERATE NEW DATASET using GPU
+    PATH_TO_REALDATA = 'DATASET_and_OUTPUT/fine_resolution/data/fit_results_realdata'
     # batch_size = 5000
-    batch_size = 5000*10
+    batch_size = 5000*2
     # N1 = 143331
     N1 = 50000
     # N2 = 40000
@@ -711,13 +717,13 @@ if __name__ == '__main__':
     # start is for the total time CPU + GPU
     start = time.perf_counter()
     torch.cuda.synchronize()    # drain any prior work
-    list_file_source = [f for f in os.listdir('data/labelledData') if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
+    list_file_source = [f for f in os.listdir(PATH_TO_REALDATA) if ('.csv' in f) and ('kde' not in f) and ('fit_results' in f)]
     # list_file_source = [f for f in os.listdir('data/labelledData/labelledData_cpu/generatedSamples') if ('.csv' in f)]
-    labeldata_obj = LabelData(root_path='data/labelledData', filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
+    labeldata_obj = LabelData(root_path=PATH_TO_REALDATA, filename=list_file_source, fixHeader=False, sep=',', generate_new_data=True)
     print('Class c1')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=1000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=3*N1, target_class='c1', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=2*N1, target_class='c1', batch_size=batch_size)
     end_evt.record()
     
     torch.cuda.synchronize()    # wait until all GPU operations are done
@@ -729,7 +735,7 @@ if __name__ == '__main__':
     print('Class c3')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=3*N1, target_class='c3', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=2*N1, target_class='c3', batch_size=batch_size)
     end_evt.record()
 
     torch.cuda.synchronize()    # wait until all GPU operations are done
