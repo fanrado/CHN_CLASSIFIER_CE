@@ -44,6 +44,8 @@ class Sim_waveform:
         if params is None:
             return None
         x = np.linspace(params[0], params[0]+70, 70)
+        # 2us to tick unit => 2us/0.512
+        params[2] = params[2]/0.512
         R = response(x=x, par=params)
         return R
     
@@ -84,6 +86,64 @@ class Sim_waveform:
         output_file = f'{self.output_path}/{output_file}.npy'
         np.save(output_file, enriched_data)
         print(f'Data saved to {output_file}')
+    
+    def data2npy_torch(self):
+        # Check if CUDA is available
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {device}")
+
+        # Get the number of samples to process
+        N_samples = min(self.N_samples, len(self.sim_data))
+        
+        # Extract parameters for all samples at once
+        params_df = self.sim_data[self.response_params].iloc[:N_samples]
+        params_tensor = torch.tensor(params_df.values, dtype=torch.float32, device=device)
+        
+        # Create time array on GPU
+        # Assuming params[0] is 't', we'll create x arrays for each sample
+        t_values = params_tensor[:, 0]  # First column is 't'
+        batch_size = params_tensor.shape[0]
+        
+        # Create x arrays: shape [batch_size, 70]
+        x_offsets = torch.arange(70, dtype=torch.float32, device=device)
+        x_arrays = t_values.unsqueeze(1) + x_offsets.unsqueeze(0)  # Broadcasting
+        
+        # Convert t_p from 2us to tick unit (divide by 0.512), only used for plotting
+        params_tensor[:, 2] = params_tensor[:, 2] / 0.512
+        
+        # Generate all waveforms at once using vectorized response function
+        R_batch = response_torch(x_arrays, params_tensor)  # Shape: [batch_size, 70]
+        params_tensor[:, 2] = params_tensor[:, 2] * 0.512
+        
+        # Move results back to CPU for numpy operations
+        R_batch_cpu = R_batch.cpu().numpy()
+        params_cpu = params_tensor.cpu().numpy()
+        
+        # Build enriched data list
+        enriched_data = []
+        for i in range(N_samples):
+            # Create parameter dictionary
+            dict_params = dict(zip(self.response_params, params_cpu[i]))
+            
+            # Add additional data
+            dict_params['#Ch.#'] = self.sim_data['#Ch.#'].iloc[i]
+            dict_params['class'] = self.sim_data['class'].iloc[i]
+            dict_params['wf'] = R_batch_cpu[i]
+            dict_params['integral_R'] = self.sim_data['integral_R'].iloc[i]
+            dict_params['max_deviation'] = self.sim_data['max_deviation'].iloc[i]
+            
+            enriched_data.append(dict_params)
+        
+        # Save the enriched_data to a .npy file
+        output_file = self.path_to_sim.split('/')[-1].split('.')[0]
+        output_file = f'{self.output_path}/{output_file}.npy'
+        np.save(output_file, enriched_data)
+        print(f'Data saved to {output_file}')
+        
+        # Clean up GPU memory
+        if device.type == 'cuda':
+            torch.cuda.empty_cache()
+
 
 def split_train_test_dataset(path_to_data=None, output_path=None, frac_test=0.2, N1=None, N2=None, N3=None, N4=None):
     """
