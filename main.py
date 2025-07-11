@@ -3,15 +3,15 @@ import pandas as pd
 import numpy as np
 from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform
 
-split_dataset_classifier    = True # set to True if you need to split the dataset using the classification stage into train and test
-run_classifier              = True
-run_regression              = True
+split_dataset_classifier    = False # set to True if you need to split the dataset using the classification stage into train and test
+run_classifier              = False
+run_regression              = False
 generate_npy                = False # set to true if you need to generate the npy files for the preclassification
-run_preclassification       = False
+run_preclassification       = True
 # N_samples                 = 3000
 # all_nsamples              = [3000+i*4000 for i in range(20)]
 # all_nsamples              = [200000]
-all_nsamples                = [100000]
+all_nsamples                = [400000]
 print("All number of samples to be used: ", all_nsamples)
 print("Press Enter to continue....")
 sys.stdin.read(1)
@@ -79,8 +79,9 @@ if __name__=='__main__':
         # # #
         # # GENERATING THE npy FILES FOR THE PRECLASSIFICATION
         if generate_npy:
-            path_to_simdata = 'data/labelledData/labelledData_gpuSamples_alot'
-            OUT_PATH = '/'.join([root_path, f'Ntotsamples_{N_samples}'])
+            # path_to_simdata = 'data/labelledData/labelledData_gpuSamples_alot'
+            path_to_simdata = 'DATASET_and_OUTPUT/fine_resolution/data/synthetic_dataset'
+            OUT_PATH = '/'.join([path_to_simdata, f'Ntotsamples_{N_samples}'])
             # path_to_simdata = path_to_data
             # OUT_PATH = path_to_simdata
             try:
@@ -94,36 +95,41 @@ if __name__=='__main__':
             #                       output_path='data/labelledData/labelledData/WF_sim/')
             sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
                                 output_path=f'{OUT_PATH}/npy/', N_samples=N_samples)
-            sim_wf_obj.data2npy()
+            # sim_wf_obj.data2npy()
+            sim_wf_obj.data2npy_torch()
 
             # class c2
             print('Generating wf for class c2...')
             filename = 'generate_new_samples_c2.csv'
             sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
                                 output_path=f'{OUT_PATH}/npy/', N_samples=N_samples)
-            sim_wf_obj.data2npy()
+            # sim_wf_obj.data2npy()
+            sim_wf_obj.data2npy_torch()
 
             # class c3
             print('Generating wf for class c3...')
             filename = 'generate_new_samples_c3.csv'
             sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
                                 output_path=f'{OUT_PATH}/npy/', N_samples=N_samples)
-            sim_wf_obj.data2npy()
+            # sim_wf_obj.data2npy()
+            sim_wf_obj.data2npy_torch()
 
             # class c4
             print('Generating wf for class c4...')
             filename = 'generate_new_samples_c4.csv'
             sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
                                 output_path=f'{OUT_PATH}/npy/', N_samples=N_samples)
-            sim_wf_obj.data2npy()
+            # sim_wf_obj.data2npy()
+            sim_wf_obj.data2npy_torch()
 
         # # PRECLASSIFIER
         if run_preclassification:
-            preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-            preclassifier_obj.run()
+            # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+            # preclassifier_obj.run()
 
             
             # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
             test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_0', output_path=output_path)
-            for chn in range(2000):
-                test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', chn=chn)
+            # for chn in range(500):
+            #     test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', chn=chn)
+            test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', savefig=False)
