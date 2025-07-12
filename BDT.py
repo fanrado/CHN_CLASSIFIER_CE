@@ -799,10 +799,11 @@ class TestPreclassifier:
         return preclassifier_model
 
     def predict_oneCHN(self, path_to_model='', chn=0, savefig=False):
-        try:
-            os.mkdir(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT')
-        except:
-            pass
+        if savefig:
+            try:
+                os.mkdir(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT')
+            except:
+                pass
         # # read channel response from root file
         wf, hist = self.getCHN_resp(chn=chn)
         # # load bdt classifier model
