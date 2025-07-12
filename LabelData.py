@@ -174,13 +174,20 @@ class LabelData:
             # x2 = x[pos_peak+6:]
             # y2 = R_ideal[pos_peak+6:]
             # indexshift = 4
-            indexshift = 6
+            indexshift = 8
             xtail = x[pos_peak+indexshift:]
             # find intersection
             x1 = x[pos_peak+indexshift:]
             y1 = R[pos_peak+indexshift:]
             x2 = x[pos_peak+indexshift:]
             y2 = R_ideal[pos_peak+indexshift:]
+
+            # plt.figure()
+            # plt.plot(x, R, 'b--')
+            # plt.plot(x1, y1, 'b*')
+            # plt.grid(True)
+            # plt.show()
+            # sys.exit()
             try:
                 x_intersect, y_intersect = self.find_intersection(x1,y1,x2, y2)
             except:
@@ -552,7 +559,7 @@ class LabelData:
 
         # find peak
         pos_peak = torch.argmax(R_ideal, dim=1)        # [B]
-        indexshift = 6
+        indexshift = 8
         # try:
         idx_base = None
         try:
@@ -681,7 +688,7 @@ class LabelData:
         # all_df.to_csv(f"{self.data_output_path}/generate_new_samples_{target_class}.txt", sep='\t', index=False)
 
 if __name__ == '__main__':
-    ## LABELLING THE DATA
+    # ## LABELLING THE DATA
     # PATH_TO_REALDATA = 'DATASET_and_OUTPUT/Fit_Results_realdata'
     # # labeldata_obj = LabelData(root_path='data/', filename='fit_results_run_30404_no_avg.txt', fixHeader=False)
     # # labeldata_obj.runLabelling()
@@ -707,9 +714,9 @@ if __name__ == '__main__':
     ## GENERATE NEW DATASET using GPU
     PATH_TO_REALDATA = 'DATASET_and_OUTPUT/fine_resolution/data/fit_results_realdata'
     # batch_size = 5000
-    batch_size = 5000*2
+    batch_size = 5000*10
     # N1 = 143331
-    N1 = 50000
+    N1 = 200000
     # N2 = 40000
     # related to GPU kernel time
     start_evt   = torch.cuda.Event(enable_timing=True)
