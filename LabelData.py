@@ -742,7 +742,7 @@ if __name__ == '__main__':
     print('Class c3')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=2*N1, target_class='c3', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=4*N1, target_class='c3', batch_size=batch_size)
     end_evt.record()
 
     torch.cuda.synchronize()    # wait until all GPU operations are done
@@ -751,7 +751,7 @@ if __name__ == '__main__':
     print('Class c2')
     start_evt.record()
     # labeldata_obj.GenerateNewSamples_gpu(N_samples=20000, target_class='c1')
-    labeldata_obj.GenerateNewSamples_gpu(N_samples=2*N1, target_class='c2', batch_size=batch_size)
+    labeldata_obj.GenerateNewSamples_gpu(N_samples=4*N1, target_class='c2', batch_size=batch_size)
     end_evt.record()
     torch.cuda.synchronize()    # wait until all GPU operations are done
     print(f'GPU kernel time : {start_evt.elapsed_time(end_evt):.1f} ms')
