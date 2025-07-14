@@ -801,7 +801,7 @@ class TestPreclassifier:
     def predict_oneCHN(self, path_to_model='', chn=0, savefig=False):
         if savefig:
             try:
-                os.mkdir(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT')
+                os.mkdir(f'{self.output_path}/testPreclassifier_fromROOT')
             except:
                 pass
         # # read channel response from root file
@@ -823,7 +823,7 @@ class TestPreclassifier:
             ax.legend()
             # ax.add_patch(rect)
             ax.grid()
-            fig.savefig(f'{self.output_path}/preclassifier//testPreclassifier_fromROOT/wf_chn{chn}_{self.map_class[predictions[0]]}.png')
+            fig.savefig(f'{self.output_path}/testPreclassifier_fromROOT/wf_{self.hist_prefix}_chn{chn}_{self.map_class[predictions[0]]}.png')
             plt.close()
             # sys.exit()
             if self.map_class[predictions[0]]=='c3':
@@ -831,17 +831,16 @@ class TestPreclassifier:
 
         return {'chn': chn, 'class': predicted_class, 'class_meaning': self.class_to_meaning[predicted_class]}
     
-    def run(self, path_to_model='', savefig=False):
+    def run(self, path_to_model='', savefig=False, Nchannels=2000):
         all_chn_results = {'chn': [], 'class': [], 'class_meaning': []}
-        N = 2000
         for chn in self.all_channels:
             onechn_pred = self.predict_oneCHN(path_to_model=path_to_model, chn=chn, savefig=savefig)
             all_chn_results['chn'].append(onechn_pred['chn'])
             all_chn_results['class'].append(onechn_pred['class'])
             all_chn_results['class_meaning'].append(onechn_pred['class_meaning'])
             if chn%100==0:
-                print(f'{100*chn/N:.2f}% of {N}')
-            if chn == N:
+                print(f'{100*chn/Nchannels:.2f}% of {Nchannels}')
+            if chn == Nchannels:
                 break
         prediction_df = pd.DataFrame(all_chn_results)
-        prediction_df.to_csv(f'{self.output_path}/preclassifier/preclassification_ROOT_run_{self.run_number}.csv', index=False)
+        prediction_df.to_csv(f'{self.output_path}/preclassification_ROOT_{self.hist_prefix}_run_{self.run_number}.csv', index=False)
