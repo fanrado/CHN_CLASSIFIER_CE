@@ -44,7 +44,7 @@ if __name__=='__main__':
             OUT_PATH = '/'.join([root_path, f'Ntotsamples_{N_samples}'])
             # root_path = path_to_data
             # OUT_PATH = root_path
-            split_train_test_dataset(path_to_data=root_path, output_path=OUT_PATH, frac_test=0.2, N1=N_samples, N2=N_samples, N3=N_samples, N4=N_samples) #20% of the whole dataset is used for testing
+            split_train_test_dataset(path_to_data=root_path, output_path=OUT_PATH, frac_test=0.2, N1=N_samples, N2=2*N_samples, N3=2*N_samples, N4=N_samples) #20% of the whole dataset is used for testing
 
         #
         path_to_data = f'{path_to_data}/Ntotsamples_{N_samples}'
