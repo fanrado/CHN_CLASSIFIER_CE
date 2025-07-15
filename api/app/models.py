@@ -2,6 +2,7 @@ import pandas as pd
 import xgboost as xgb
 from xgboost import XGBRegressor, XGBClassifier
 import numpy as np
+import uproot
 
 class CSVModel:
     def __init__(self, csv_file_path, regressor_model_file_path, classifier_model_file_path):
@@ -95,16 +96,33 @@ class CSVModel:
         predicted_class = [self.map_class[pred] for pred in pred_class]
         return intR_maxdev_df, predicted_class
     
-# from flask_sqlalchemy import SQLAlchemy
+class ROOTmodel:
+    def __init__(self, root_file_path: str, hist_prefix: str):
+        self.root_file_path     = root_file_path
+        self.hist_prefix        = hist_prefix
+        self.rootdata, self.channels = self.read_ROOT(filename=self.root_file_path)
 
-# db = SQLAlchemy()
 
-# class ExampleModel(db.Model):
-#     __tablename__ = 'example_model'
+    def read_ROOT(self, filename: str):
+        root_file       = uproot.open(filename)
+        all_hist1d      = [f for f in root_file.keys() if self.hist_prefix in f]
+        all_channels    = [int(hist1d.split(';')[0].split('_')[-1]) for hist1d in all_hist1d]
+        return root_file, all_channels 
 
-#     id = db.Column(db.Integer, primary_key=True)
-#     name = db.Column(db.String(100), nullable=False)
-#     description = db.Column(db.String(255), nullable=True)
+    def getCHN_resp(self, chn=0):
+        histname        = '_'.join([self.hist_prefix, 'channel', f'{chn};1'])
+        Npoints         = 70
+        hist            = np.array([])
+        try:
+            hist        = self.rootdata[histname].to_numpy()[0][:Npoints]
+            time_ticks  = self.rootdata[histname].to_numpy()[1][:Npoints]
+        except:
+            histname    = '_'.join([self.hist_prefix, 'channel', f'{chn};0'])
+            hist        = self.rootdata[histname].to_numpy()[0][:Npoints]
+            time_ticks  = self.rootdata[histname].to_numpy()[1][:Npoints]
+        # wf              = hist.copy(
+        # return wf#, hist
+        wf      = [float(d) for d in hist]
+        tticks  = [float(d) for d in time_ticks]
+        return tticks, wf
 
-#     def __repr__(self):
-#         return f'<ExampleModel {self.name}>'
