@@ -844,3 +844,59 @@ class TestPreclassifier:
                 break
         prediction_df = pd.DataFrame(all_chn_results)
         prediction_df.to_csv(f'{self.output_path}/preclassification_ROOT_{self.hist_prefix}_run_{self.run_number}.csv', index=False)
+
+import scipy.signal as signal
+class ToyTestPreclassifier:
+    def __init__(self, peaktype='Positive', rootfilename='', output_path=''):
+        self.output_path    = output_path
+        self.peaktype       = peaktype
+        self.run_number     = int(rootfilename.split('-')[1])
+        self.rootdata       = uproot.open(rootfilename)
+        self.h_daq          = self.rootdata['h_daq'].to_numpy()[0]
+        self.all_channels   = [chn for chn in range(len(self.h_daq))]
+        self.class_map      = {'c1': 0, 'c2': 1, 'c3': 2, 'c4': 3} # classes to numbers
+        self.map_class      = {v: k for k, v in self.class_map.items()} # numbers to classes
+    
+    def gethistogram1d(self, chn):
+        test_function = True
+        # this is assuming positive peak
+        n_before_peak = 4
+        n_after_peak = 66
+        onehist1d = self.h_daq[chn]
+        pospeaks = signal.find_peaks(onehist1d, height=0.9*np.max(onehist1d))
+        pospeak_of_interest = pospeaks[0][0]
+        wf = onehist1d[pospeak_of_interest-n_before_peak:pospeak_of_interest+n_after_peak]
+        if test_function:
+            plt.figure()
+            plt.plot(wf)
+            plt.grid(True)
+            plt.savefig(f'{self.output_path}/test_plot/test_chn{chn}.png')
+            plt.close()
+        return chn, wf.reshape(1, -1)
+    
+    def load_bdt_model(self, path_to_model=''):
+        preclassifier_model = XGBClassifier()
+        preclassifier_model.load_model(path_to_model)
+        return preclassifier_model
+    
+    def predict_oneCHN(self, path_to_model='', chn=0):
+        # # read channel response from root file
+        chn, wf = self.gethistogram1d(chn=chn)
+        # # load bdt classifier model
+        preClassifier_model = self.load_bdt_model(path_to_model=path_to_model)
+        # # predict the class of the waveform : positive peak
+        predictions = preClassifier_model.predict(wf)
+        return {'chn': chn, 'class': self.map_class[predictions[0]]}
+    
+    def run(self, path_to_model='', Nchannels=2000):
+        all_chn_results = {'chn': [], 'class': []}
+        for chn in self.all_channels:
+            onechn_pred = self.predict_oneCHN(path_to_model=path_to_model, chn=chn)
+            all_chn_results['chn'].append(onechn_pred['chn'])
+            all_chn_results['class'].append(onechn_pred['class'])
+            if chn%100==0:
+                print(f'{100*chn/Nchannels:.2f}% of {Nchannels}')
+            if chn == Nchannels:
+                break
+        prediction_df = pd.DataFrame(all_chn_results)
+        prediction_df.to_csv(f'{self.output_path}/preclassification_ROOT_run_{self.run_number}.csv', index=False)
