@@ -1,7 +1,7 @@
 import os, sys
 import pandas as pd
 import numpy as np
-from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform
+from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform, ToyTestPreclassifier
 
 training                    = False
 split_dataset_classifier    = False # set to True if you need to split the dataset using the classification stage into train and test
@@ -133,6 +133,8 @@ if __name__=='__main__':
 
     if run_testpreclassification:
         output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/test_preclassifier'
-        # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
-        test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
-        test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=2000)
+        # # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
+        # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
+        # test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=2000)
+        test_ = ToyTestPreclassifier(peaktype='Positive', rootfilename='magnify-30413-8.root', output_path=output_path)
+        test_.run(path_to_model= f'{output_path}/preclassifier.json', Nchannels=100)
