@@ -896,7 +896,7 @@ class ToyTestPreclassifier:
             all_chn_results['class'].append(onechn_pred['class'])
             if chn%100==0:
                 print(f'{100*chn/Nchannels:.2f}% of {Nchannels}')
-            if chn == Nchannels:
-                break
+            # if chn == Nchannels:
+            #     break
         prediction_df = pd.DataFrame(all_chn_results)
         prediction_df.to_csv(f'{self.output_path}/preclassification_ROOT_run_{self.run_number}.csv', index=False)
