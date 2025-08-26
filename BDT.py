@@ -43,7 +43,9 @@ class Sim_waveform:
     def __generate_1wf(self, params=None):
         if params is None:
             return None
-        x = np.linspace(params[0], params[0]+70, 70)
+        nbins = 70
+        nbins = 115
+        x = np.linspace(params[0], params[0]+nbins, nbins)
         # 2us to tick unit => 2us/0.512
         params[2] = params[2]/0.512
         R = response(x=x, par=params)
@@ -88,6 +90,8 @@ class Sim_waveform:
         print(f'Data saved to {output_file}')
     
     def data2npy_torch(self):
+        nbins = 70
+        nbins = 115
         # Check if CUDA is available
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {device}")
@@ -105,10 +109,10 @@ class Sim_waveform:
         batch_size = params_tensor.shape[0]
         
         # Create x arrays: shape [batch_size, 70]
-        x_offsets = torch.arange(70, dtype=torch.float32, device=device)
+        x_offsets = torch.arange(nbins, dtype=torch.float32, device=device)
         x_arrays = t_values.unsqueeze(1) + x_offsets.unsqueeze(0)  # Broadcasting
         
-        # Convert t_p from 2us to tick unit (divide by 0.512), only used for plotting
+        # Convert t_p from 2us to tick unit (divide by 0.512), only used for plotting``
         params_tensor[:, 2] = params_tensor[:, 2] / 0.512
         
         # Generate all waveforms at once using vectorized response function
@@ -761,6 +765,7 @@ class TestPreclassifier:
             - Without passing through the prediction of the fit parameters, predict the class of the input waveform directly.
     """
     def __init__(self, path_to_root_file='', hist_prefix='hist_0', output_path=''):
+        self.nbins              = 115 # 70
         self.path_to_root_file  = path_to_root_file
         self.run_number         = int(path_to_root_file.split('run_')[-1].split('.')[0])
         self.output_path        = output_path
@@ -789,7 +794,7 @@ class TestPreclassifier:
     
     def getCHN_resp(self, chn):
         histname = '_'.join([self.hist_prefix, 'channel', f'{chn};1'])
-        hist = self.get_histogram(root_data=self.root_data, histname=histname, Npoints=70)
+        hist = self.get_histogram(root_data=self.root_data, histname=histname, Npoints=self.nbins)
         wf = hist.copy().reshape(1,-1)
         return wf, hist # wf is the input of the preclassifier BDT; hist is the original waveform.
     
@@ -858,10 +863,12 @@ class ToyTestPreclassifier:
         self.map_class      = {v: k for k, v in self.class_map.items()} # numbers to classes
     
     def gethistogram1d(self, chn):
-        test_function = True
+        test_function = False
         # this is assuming positive peak
-        n_before_peak = 4
-        n_after_peak = 66
+        # n_before_peak = 4
+        # n_after_peak = 66
+        n_before_peak = 15
+        n_after_peak = 100
         onehist1d = self.h_daq[chn]
         pospeaks = signal.find_peaks(onehist1d, height=0.9*np.max(onehist1d))
         pospeak_of_interest = pospeaks[0][0]

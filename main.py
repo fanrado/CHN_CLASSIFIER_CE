@@ -13,7 +13,7 @@ run_testpreclassification   = True
 # N_samples                 = 3000
 # all_nsamples              = [3000+i*4000 for i in range(20)]
 # all_nsamples              = [200000]
-all_nsamples                = [400000]
+all_nsamples                = [200000]
 if training:
     print("All number of samples to be used: ", all_nsamples)
     print("Press Enter to continue....")
@@ -134,7 +134,7 @@ if __name__=='__main__':
     if run_testpreclassification:
         output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/test_preclassifier'
         # # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
-        # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
-        # test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=2000)
+        test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
+        test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=1000)
         test_ = ToyTestPreclassifier(peaktype='Positive', rootfilename='magnify-30413-8.root', output_path=output_path)
         test_.run(path_to_model= f'{output_path}/preclassifier.json', Nchannels=100)
