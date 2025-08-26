@@ -137,7 +137,9 @@ class LabelData:
         max_deviations = []
         for i in range(len(tmpdata)):
             # Calculation in CPU
-            x = np.linspace(tmpdata['t'].iloc[i], tmpdata['t'].iloc[i]+70, 70)
+            # nbins = 70
+            nbins = 115
+            x = np.linspace(tmpdata['t'].iloc[i], tmpdata['t'].iloc[i]+nbins, nbins)
             par0 = list(tmpdata[self.response_params].iloc[i])
             #
             ## par0[2]: us to ticks
@@ -195,7 +197,7 @@ class LabelData:
             # select data between pos_peak+6 and x_intersect
             # mask = x1 <= x_intersect
             # mask = x1 <= x[pos_peak+50] # what if not finding the intersection ==> fixing the integration domain
-            mask = x1 <= x[70-(pos_peak+indexshift)-1] # what if not finding the intersection ==> fixing the integration domain
+            mask = x1 <= x[nbins-(pos_peak+indexshift)-1] # what if not finding the intersection ==> fixing the integration domain
             x_selected = x1[mask]
             R_selected = y1[mask]
             R_ideal_selected = y2[mask]
@@ -550,8 +552,12 @@ class LabelData:
         L = 70
         # build time‐grid: [B,L]
         t0 = pars[:,0].unsqueeze(1)   # [B,1]
-        # xs = t0 + torch.arange(L, device=self.device).view(1, L)
         xs = t0 + torch.linspace(0, 70, L, device=self.device).view(1, L)
+        # The actual fitter uses 115 bins so let's change it to 115
+        L = 115
+        # build time‐grid: [B,L]
+        t0 = pars[:,0].unsqueeze(1)   # [B,1]
+        xs = t0 + torch.linspace(0, 115, L, device=self.device).view(1, L)
         pars[:, 2] = pars[:, 2] / 0.512
         # compute in batch
         R      = response_torch(xs, pars)              # [B,L]
