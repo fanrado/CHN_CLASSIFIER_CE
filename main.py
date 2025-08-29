@@ -3,17 +3,17 @@ import pandas as pd
 import numpy as np
 from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform, ToyTestPreclassifier
 
-training                    = False
+training                    = True
 split_dataset_classifier    = False # set to True if you need to split the dataset using the classification stage into train and test
 run_classifier              = False
 run_regression              = False
-generate_npy                = False # set to true if you need to generate the npy files for the preclassification
+generate_npy                = True # set to true if you need to generate the npy files for the preclassification
 run_preclassification       = True
 run_testpreclassification   = False
 # N_samples                 = 3000
-# all_nsamples              = [5000+i*20000 for i in range(2,20)]
+all_nsamples              = [10000+i*20000 for i in range(20)]
 # all_nsamples              = [200000]
-all_nsamples                = [385000]
+# all_nsamples                = [385000]
 if training:
     print("All number of samples to be used: ", all_nsamples)
     print("Press Enter to continue....")
@@ -131,8 +131,8 @@ if __name__=='__main__':
 
         # # PRECLASSIFIER
         if run_preclassification:
-            # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-            # preclassifier_obj.run()
+            preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+            preclassifier_obj.run()
             test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
             test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', savefig=True, Nchannels=2000)
 
