@@ -22,13 +22,10 @@ if training:
 # N_samples = None
 if __name__=='__main__':
     for N_samples in all_nsamples:
-        # path_to_data = 'data/labelledData/labelledData_gpuSamples_alot/'
-        # output_path = f'OUTPUT/bdt_Ntotsamples_{N_samples}'
 
         path_to_data = 'DATASET_and_OUTPUT/fine_resolution/data/synthetic_dataset'
         output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/bdt_Ntotsamples_{N_samples}'
-        # path_to_data = 'data/labelledData'
-        # output_path = f'OUTPUT/bdt_fitresults'
+
         try:
             os.mkdir(output_path)
         except:
@@ -45,8 +42,7 @@ if __name__=='__main__':
             # root_path = 'data/labelledData/labelledData_gpuSamples_alot'
             root_path = 'DATASET_and_OUTPUT/fine_resolution/data/synthetic_dataset'
             OUT_PATH = '/'.join([root_path, f'Ntotsamples_{N_samples}'])
-            # root_path = path_to_data
-            # OUT_PATH = root_path
+
             split_train_test_dataset(path_to_data=root_path, output_path=OUT_PATH, frac_test=0.2, N1=N_samples, N2=2*N_samples, N3=2*N_samples, N4=N_samples) #20% of the whole dataset is used for testing
 
         #
@@ -98,8 +94,6 @@ if __name__=='__main__':
             # class c1
             print('Generating wf for class c1...')
             filename = 'generate_new_samples_c1.csv'
-            # sim_wf_obj = Sim_waveform(path_to_sim='data/labelledData/labelledData/generatedSamples/generated_new_samples_c1_labelled_tails.csv',
-            #                       output_path='data/labelledData/labelledData/WF_sim/')
             sim_wf_obj = Sim_waveform(path_to_sim=f'{path_to_simdata}/{filename}',
                                 output_path=f'{OUT_PATH}/npy/', N_samples=N_samples)
             # sim_wf_obj.data2npy()
@@ -131,15 +125,13 @@ if __name__=='__main__':
 
         # # PRECLASSIFIER
         if run_preclassification:
-            # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-            # preclassifier_obj.run()
+            preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+            preclassifier_obj.run()
             test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
             test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', savefig=True, Nchannels=1000)
 
     if run_testpreclassification:
         output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/test_preclassifier'
         # # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
-        # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
-        # test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=1000)
         test_ = ToyTestPreclassifier(peaktype='Positive', rootfilename='magnify-30413-8.root', output_path=output_path)
-        test_.run(path_to_model= f'{output_path}/preclassifier.json', Nchannels=100)
+        test_.run(path_to_model= f'{output_path}/preclassifier.json')
