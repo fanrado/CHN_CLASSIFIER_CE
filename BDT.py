@@ -821,17 +821,19 @@ class TestPreclassifier:
         if savefig:
             # print(self.map_class[predictions[0]])
             posmax = np.argmax(wf.reshape(-1,1))
+            x = np.linspace(0, hist.shape[0], hist.shape[0])
             # print(70-posmax-4)
             fig,ax = plt.subplots()
             # rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
-            ax.plot(hist, label=f'pred class = {self.map_class[predictions[0]]}')
+            ax.plot(x*0.512, hist, label=f'pred class = {self.map_class[predictions[0]]}')
+            ax.set_ylim([-500,1000])
             ax.legend()
             # ax.add_patch(rect)
+            ax.set_xlabel(r'Time ($0.512\mu s/tick$)')
             ax.grid()
             fig.savefig(f'{self.output_path}/testPreclassifier_fromROOT/wf_{self.hist_prefix}_chn{chn}_{self.map_class[predictions[0]]}.png')
             plt.close()
-            # sys.exit()
-            if self.map_class[predictions[0]]=='c3':
+            if self.map_class[predictions[0]]=='c1':
                 print(self.map_class[predictions[0]])
 
         return {'chn': chn, 'class': predicted_class, 'class_meaning': self.class_to_meaning[predicted_class]}
