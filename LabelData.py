@@ -222,10 +222,15 @@ class LabelData:
             deviations = R_selected - R_ideal_selected
 
             max_deviation = np.max(deviations)
-            # if np.abs(np.min(deviations)) > np.max(deviations):
             if np.abs(np.min(deviations)) > np.abs(np.max(deviations)):
                 max_deviation = np.min(deviations)
             max_deviations.append(max_deviation)
+            # max_deviation = 0
+            # if np.abs(np.min(deviations)) > np.abs(np.max(deviations)):
+            #     max_deviation = np.min(deviations)
+            # else:
+            #     max_deviation = np.max(deviations)
+            # max_deviations.append(max_deviation)
             # time_peaks_diff.append(x[np.argmax(R)] - x[pos_peak])
         integrals_R_selected = np.array(integrals_R_selected)
         integrals_R_ideal_selected = np.array(integrals_R_ideal_selected)
