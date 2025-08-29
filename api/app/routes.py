@@ -9,7 +9,8 @@ CORS(api, resources={r"/data/*": {"origins": "http://localhost:3000"}})
 # CORS(api)
 # Initialize the CSVModel
 # csv_model = CSVModel(csv_file_path='data/fit_results_run_30360_no_avg_labelled_tails.csv', model_file_path='xgboost_model.json')
-csv_model   = CSVModel(csv_file_path='data/fit_results_run_30360_no_avg_labelled_tails.csv', regressor_model_file_path='models/regressor_bdt_model.json', classifier_model_file_path='models/classifier_bdt_model.json')
+# csv_model   = CSVModel(csv_file_path='data/fit_results_run_30360_no_avg_labelled_tails.csv', regressor_model_file_path='models/regressor_bdt_model.json', classifier_model_file_path='models/classifier_bdt_model.json')
+csv_model   = CSVModel(csv_file_path='data/fit_results_run_30413_no_avg_labelled_tails.csv', regressor_model_file_path='models/regressor_bdt_model.json', classifier_model_file_path='models/classifier_bdt_model.json')
 root_model  = ROOTmodel(root_file_path='data/raw_waveforms_run_30413.root', hist_prefix='hist_0') # read the root data
 
 @api.route('/health', methods=['GET'])
