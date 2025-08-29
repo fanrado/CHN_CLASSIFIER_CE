@@ -898,7 +898,8 @@ class ToyTestPreclassifier:
         predictions = preClassifier_model.predict(wf)
         return {'chn': chn, 'class': self.map_class[predictions[0]]}
     
-    def run(self, path_to_model='', Nchannels=2000):
+    def run(self, path_to_model=''):
+        Nchannels = len(self.all_channels)
         all_chn_results = {'chn': [], 'class': []}
         for chn in self.all_channels:
             onechn_pred = self.predict_oneCHN(path_to_model=path_to_model, chn=chn)
