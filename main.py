@@ -3,17 +3,17 @@ import pandas as pd
 import numpy as np
 from BDT import split_train_test_dataset, BDT_Classifier, BDT_Regressor, Classify, preClassifier, TestPreclassifier, Sim_waveform, ToyTestPreclassifier
 
-training                    = False
+training                    = True
 split_dataset_classifier    = False # set to True if you need to split the dataset using the classification stage into train and test
 run_classifier              = False
 run_regression              = False
 generate_npy                = False # set to true if you need to generate the npy files for the preclassification
-run_preclassification       = False
-run_testpreclassification   = True
+run_preclassification       = True
+run_testpreclassification   = False
 # N_samples                 = 3000
-# all_nsamples              = [3000+i*4000 for i in range(20)]
+# all_nsamples              = [5000+i*20000 for i in range(2,20)]
 # all_nsamples              = [200000]
-all_nsamples                = [200000]
+all_nsamples                = [385000]
 if training:
     print("All number of samples to be used: ", all_nsamples)
     print("Press Enter to continue....")
@@ -51,6 +51,10 @@ if __name__=='__main__':
 
         #
         path_to_data = f'{path_to_data}/Ntotsamples_{N_samples}'
+        try:
+            os.mkdir(path_to_data)
+        except:
+            pass
         # path_to_data = path_to_data
         # CLASSIFICATION MODEL
         if run_classifier:
@@ -127,14 +131,15 @@ if __name__=='__main__':
 
         # # PRECLASSIFIER
         if run_preclassification:
-            preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
-            preclassifier_obj.run()
-
+            # preclassifier_obj = preClassifier(path_to_train=f'{path_to_data}/npy', output_path=output_path)
+            # preclassifier_obj.run()
+            test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
+            test_.run(path_to_model=f'{output_path}/preclassifier/preclassifier.json', savefig=True, Nchannels=5000)
 
     if run_testpreclassification:
         output_path = f'DATASET_and_OUTPUT/fine_resolution/OUTPUT/test_preclassifier'
         # # # TEST PRECLASSIFIER USING WAVEFORM DIRECTLY FROM A ROOT FILE
-        test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
-        test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=1000)
+        # test_ = TestPreclassifier(path_to_root_file='raw_waveforms_run_30413.root', hist_prefix='hist_1', output_path=output_path)
+        # test_.run(path_to_model=f'{output_path}/preclassifier.json', savefig=True, Nchannels=1000)
         test_ = ToyTestPreclassifier(peaktype='Positive', rootfilename='magnify-30413-8.root', output_path=output_path)
         test_.run(path_to_model= f'{output_path}/preclassifier.json', Nchannels=100)
