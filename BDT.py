@@ -826,6 +826,7 @@ class TestPreclassifier:
             fig,ax = plt.subplots()
             # rect = patches.Rectangle((posmax+4, -500), 70-posmax-4-1, 2000, linewidth=2, edgecolor='red', facecolor='blue', alpha=0.1)
             ax.plot(x*0.512, hist, label=f'pred class = {self.map_class[predictions[0]]}')
+            ax.plot([x[posmax+8]*0.512], hist[posmax+8], 'r+', label='start of the tail')
             ax.set_ylim([-500,1000])
             ax.legend()
             # ax.add_patch(rect)
